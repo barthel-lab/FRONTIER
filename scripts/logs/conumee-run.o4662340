@@ -1,0 +1,1021 @@
+Loading required package: minfi
+Loading required package: methods
+Loading required package: BiocGenerics
+Loading required package: parallel
+
+Attaching package: ‘BiocGenerics’
+
+The following objects are masked from ‘package:parallel’:
+
+    clusterApply, clusterApplyLB, clusterCall, clusterEvalQ,
+    clusterExport, clusterMap, parApply, parCapply, parLapply,
+    parLapplyLB, parRapply, parSapply, parSapplyLB
+
+The following objects are masked from ‘package:stats’:
+
+    IQR, mad, xtabs
+
+The following objects are masked from ‘package:base’:
+
+    anyDuplicated, append, as.data.frame, cbind, colnames, do.call,
+    duplicated, eval, evalq, Filter, Find, get, grep, grepl, intersect,
+    is.unsorted, lapply, lengths, Map, mapply, match, mget, order,
+    paste, pmax, pmax.int, pmin, pmin.int, Position, rank, rbind,
+    Reduce, rownames, sapply, setdiff, sort, table, tapply, union,
+    unique, unsplit, which, which.max, which.min
+
+Loading required package: GenomicRanges
+Loading required package: stats4
+Loading required package: S4Vectors
+
+Attaching package: ‘S4Vectors’
+
+The following objects are masked from ‘package:base’:
+
+    colMeans, colSums, expand.grid, rowMeans, rowSums
+
+Loading required package: IRanges
+Loading required package: GenomeInfoDb
+Loading required package: SummarizedExperiment
+Loading required package: Biobase
+Welcome to Bioconductor
+
+    Vignettes contain introductory material; view with
+    'browseVignettes()'. To cite Bioconductor, see
+    'citation("Biobase")', and for packages 'citation("pkgname")'.
+
+Loading required package: Biostrings
+Loading required package: XVector
+Loading required package: bumphunter
+Loading required package: foreach
+Loading required package: iterators
+Loading required package: locfit
+locfit 1.5-9.1 	 2013-03-22
+Setting options('download.file.method.GEOquery'='auto')
+Setting options('GEOquery.inmemory.gpl'=FALSE)
+Loading required package: IlluminaHumanMethylation450kmanifest
+Loading required package: IlluminaHumanMethylation450kanno.ilmn12.hg19
+Loading required package: IlluminaHumanMethylationEPICmanifest
+Loading required package: IlluminaHumanMethylationEPICanno.ilm10b2.hg19
+
+Attaching package: ‘IlluminaHumanMethylationEPICanno.ilm10b2.hg19’
+
+The following objects are masked from ‘package:IlluminaHumanMethylation450kanno.ilmn12.hg19’:
+
+    Islands.UCSC, Locations, Manifest, Other, SNPs.132CommonSingle,
+    SNPs.135CommonSingle, SNPs.137CommonSingle, SNPs.138CommonSingle,
+    SNPs.141CommonSingle, SNPs.142CommonSingle, SNPs.144CommonSingle,
+    SNPs.146CommonSingle, SNPs.147CommonSingle, SNPs.Illumina
+
+
+Attaching package: ‘limma’
+
+The following object is masked from ‘package:BiocGenerics’:
+
+    plotMA
+
+Loading tidyverse: ggplot2
+Loading tidyverse: tibble
+Loading tidyverse: tidyr
+Loading tidyverse: readr
+Loading tidyverse: purrr
+Loading tidyverse: dplyr
+Conflicts with tidy packages ---------------------------------------------------
+accumulate(): purrr, foreach
+collapse():   dplyr, Biostrings, IRanges
+combine():    dplyr, minfi, Biobase, BiocGenerics
+compact():    purrr, XVector
+desc():       dplyr, IRanges
+expand():     tidyr, S4Vectors
+filter():     dplyr, stats
+first():      dplyr, S4Vectors
+lag():        dplyr, stats
+Position():   ggplot2, BiocGenerics, base
+reduce():     purrr, GenomicRanges, IRanges
+rename():     dplyr, S4Vectors
+simplify():   purrr, IRanges
+slice():      dplyr, XVector, IRanges
+when():       purrr, foreach
+using genome annotations from UCSC
+getting 450k annotations
+ - 470870 probes used
+importing regions to exclude from analysis
+importing regions for detailed analysis
+creating bins
+ - 53891 bins created
+merging bins
+ - 15820 bins remaining
+Warning message:
+In CNV.check(object) : intensities are abnormally low (< 5000).
+Running Conumee for 201247470001_R03C01
+Running Conumee for 201247470001_R05C01
+Running Conumee for 201247470001_R01C01
+Running Conumee for 201247470001_R02C01
+Running Conumee for 201247470002_R01C01
+Running Conumee for 201247470002_R02C01
+Running Conumee for 201247470001_R06C01
+Running Conumee for 201247470001_R04C01
+Running Conumee for 201247470002_R04C01
+Running Conumee for 201247470001_R07C01
+Running Conumee for 201247470001_R08C01
+Running Conumee for 201247470002_R03C01
+Running Conumee for 201247470002_R06C01
+Running Conumee for 201247470002_R08C01
+Running Conumee for 201247470002_R07C01
+Running Conumee for 201247470002_R05C01
+Running Conumee for 201247470055_R01C01
+Running Conumee for 201247470055_R06C01
+Running Conumee for 201247470055_R07C01
+Running Conumee for 201247470055_R02C01
+Running Conumee for 201247470055_R05C01
+Running Conumee for 201247470055_R03C01
+Running Conumee for 201247470055_R04C01
+Running Conumee for 201247470055_R08C01
+Running Conumee for 201247470056_R02C01
+Running Conumee for 201247470056_R08C01
+Running Conumee for 201332340146_R02C01
+Running Conumee for 201332340008_R02C01
+Running Conumee for 201332340146_R01C01
+Running Conumee for 201332340008_R06C01
+Running Conumee for 201247470056_R04C01
+Running Conumee for 201247470056_R06C01
+Running Conumee for 201247470056_R01C01
+Running Conumee for 201332340146_R05C01
+Running Conumee for 201247470056_R05C01
+Running Conumee for 201332340008_R04C01
+Running Conumee for 201247470056_R03C01
+Running Conumee for 201332340146_R07C01
+Running Conumee for 201332340008_R05C01
+Running Conumee for 201332340146_R06C01
+Running Conumee for 201332340008_R08C01
+Running Conumee for 201332340008_R01C01
+Running Conumee for 201332340146_R03C01
+Running Conumee for 201332340008_R07C01
+Running Conumee for 201332340008_R03C01
+Running Conumee for 201247470056_R07C01
+Running Conumee for 201332340146_R04C01
+Running Conumee for 201332340146_R08C01
+Running Conumee for 201332340148_R02C01
+Running Conumee for 201247520005_R02C01
+Running Conumee for 201247520005_R01C01
+Running Conumee for 201332340148_R08C01
+Running Conumee for 201332340148_R06C01
+Running Conumee for 201332340150_R02C01
+Running Conumee for 201247520005_R07C01
+Running Conumee for 201332340148_R03C01
+Running Conumee for 201332340150_R05C01
+Running Conumee for 201247520005_R05C01
+Running Conumee for 201332340150_R07C01
+Running Conumee for 201332340148_R01C01
+Running Conumee for 201332340150_R03C01
+Running Conumee for 201332340148_R04C01
+Running Conumee for 201332340148_R05C01
+Running Conumee for 201332340150_R01C01
+Running Conumee for 201247520005_R06C01
+Running Conumee for 201332340150_R08C01
+Running Conumee for 201332340148_R07C01
+Running Conumee for 201332340150_R06C01
+Running Conumee for 201332340150_R04C01
+Running Conumee for 201247520005_R03C01
+Running Conumee for 201247520005_R04C01
+Running Conumee for 201247520018_R02C01
+Running Conumee for 201247520005_R08C01
+Running Conumee for 9721365105_R02C02
+Running Conumee for 9611518099_R03C01
+Running Conumee for 9611518117_R05C02
+Running Conumee for 9611518117_R03C01
+Running Conumee for 9611518113_R01C01
+Running Conumee for 9878820106_R05C02
+Running Conumee for 9721365104_R04C01
+Running Conumee for 9855358066_R01C02
+Running Conumee for 9611518166_R03C01
+Running Conumee for 8959312010_R02C02
+Running Conumee for 201247520018_R01C01
+Running Conumee for 9721365104_R06C02
+Running Conumee for 9721365104_R03C02
+Running Conumee for 9611518110_R06C01
+Running Conumee for 9611518117_R02C02
+Running Conumee for 9611518115_R06C02
+Running Conumee for 9721365105_R04C01
+Running Conumee for 9611518110_R03C01
+Running Conumee for 9855358068_R06C01
+Running Conumee for 9611518109_R04C01
+Running Conumee for 9721365095_R01C02
+Running Conumee for 9980102032_R05C01
+Running Conumee for 9611518099_R02C02
+Running Conumee for 9878820119_R02C01
+Running Conumee for 3999112147_R03C02
+Running Conumee for 9007225026_R02C01
+Running Conumee for 3998909006_R02C02
+Running Conumee for 8622007119_R03C01
+Running Conumee for 8622007069_R04C02
+Running Conumee for 9878820119_R03C01
+Running Conumee for 200394870074_R02C02
+Running Conumee for 6929718017_R02C02
+Running Conumee for 9533774047_R05C02
+Running Conumee for 10006823123_R06C02
+Running Conumee for 200394870074_R06C01
+Running Conumee for 9340996032_R03C01
+Running Conumee for 9969477101_R01C02
+Running Conumee for 8622007069_R03C02
+Running Conumee for 8622007069_R05C02
+Running Conumee for 8622007119_R05C01
+Running Conumee for 10006823141_R05C01
+Running Conumee for 200394870074_R01C02
+Running Conumee for 9444375019_R01C01
+Running Conumee for 200394870074_R05C01
+Running Conumee for 8622007023_R02C02
+Running Conumee for 200394870074_R04C01
+Running Conumee for 200394870074_R05C02
+Running Conumee for 200394870074_R03C02
+Running Conumee for 9388306036_R04C01
+Running Conumee for 9388306036_R05C01
+Running Conumee for 9407201038_R05C02
+Running Conumee for 9407201038_R03C02
+Running Conumee for 9388306036_R04C02
+Running Conumee for 9407201038_R01C02
+Running Conumee for 9388306036_R02C01
+Running Conumee for 200394870074_R04C02
+Running Conumee for 9388306036_R02C02
+Running Conumee for 9388306078_R06C02
+Running Conumee for 9407201038_R04C01
+Running Conumee for 9407201071_R02C02
+Running Conumee for 9388306036_R01C01
+Running Conumee for 9388306036_R03C02
+Running Conumee for 9388306036_R03C01
+Running Conumee for 9407201038_R02C02
+Running Conumee for 9407201038_R06C01
+Running Conumee for 9407201038_R04C02
+Running Conumee for 9388306078_R05C02
+Running Conumee for 9388306036_R06C01
+Running Conumee for 9388306036_R01C02
+Running Conumee for 9388306083_R01C01
+Running Conumee for 9407201038_R05C01
+Running Conumee for 9388306036_R05C02
+Running Conumee for 8221916078_R03C01
+Running Conumee for 9406922025_R04C01
+Running Conumee for 9388306083_R04C02
+Running Conumee for 9388306083_R06C02
+Running Conumee for 9388306036_R06C02
+Running Conumee for 9388306083_R02C02
+Running Conumee for 9376537105_R01C01
+Running Conumee for 9406922027_R06C02
+Running Conumee for 9388306083_R05C01
+Running Conumee for 8221916078_R01C01
+Running Conumee for 8221916078_R02C01
+Running Conumee for 8221916078_R04C01
+Running Conumee for 8221916078_R05C01
+Running Conumee for 9406922025_R03C01
+Running Conumee for 9388306083_R03C02
+Running Conumee for 9406922025_R05C01
+Running Conumee for 9406922025_R01C01
+Running Conumee for 9388306083_R05C02
+Running Conumee for 9406922027_R05C02
+Running Conumee for 9376537105_R05C01
+Running Conumee for 9388306083_R01C02
+Running Conumee for 9388306083_R06C01
+Running Conumee for 9406922025_R02C01
+Running Conumee for 9376537105_R02C01
+Running Conumee for 8667045078_R03C02
+Running Conumee for 8667045078_R04C02
+Running Conumee for 8221916038_R02C01
+Running Conumee for 9376537105_R04C01
+Running Conumee for 9376537105_R06C01
+Running Conumee for 8221916078_R04C02
+Running Conumee for 9376537105_R03C01
+Running Conumee for 8221916078_R02C02
+Running Conumee for 8667045078_R05C02
+Running Conumee for 8667045078_R06C02
+Running Conumee for 8221916078_R06C02
+Running Conumee for 8221916038_R03C01
+Running Conumee for 8221916078_R05C02
+Running Conumee for 8221916078_R03C02
+Running Conumee for 9406922027_R01C02
+Running Conumee for 8667045069_R05C01
+Running Conumee for 8221916038_R01C01
+Running Conumee for 8667045069_R06C01
+Running Conumee for 9406922027_R02C02
+Running Conumee for 9376537105_R01C02
+Running Conumee for 8221916078_R06C01
+Running Conumee for 8221916078_R01C02
+Running Conumee for 8221916038_R04C01
+Running Conumee for 8667045069_R02C02
+Running Conumee for 9647455222_R01C01
+Running Conumee for 8667045069_R03C02
+Running Conumee for 9647455222_R02C01
+Running Conumee for 9995287006_R01C01
+Running Conumee for 8221916038_R06C01
+Running Conumee for 9376537105_R04C02
+Running Conumee for 8221916038_R05C01
+Running Conumee for 9376537105_R05C02
+Running Conumee for 9995287005_R02C01
+Running Conumee for 8667045069_R05C02
+Running Conumee for 9647455222_R05C01
+Running Conumee for 9647455222_R01C02
+Running Conumee for 9647455222_R04C01
+Running Conumee for 9647455222_R06C01
+Running Conumee for 9406922025_R02C02
+Running Conumee for 9995287006_R03C01
+Running Conumee for 9376537105_R03C02
+Running Conumee for 9376537105_R02C02
+Running Conumee for 9406922025_R01C02
+Running Conumee for 8667045069_R06C02
+Running Conumee for 9995287005_R01C01
+Running Conumee for 9376537105_R06C02
+Running Conumee for 8667045069_R04C02
+Running Conumee for 9647455222_R04C02
+Running Conumee for 9647455222_R03C02
+Running Conumee for 9741950013_R03C01
+Running Conumee for 9647455222_R05C02
+Running Conumee for 9647455222_R06C02
+Running Conumee for 9741950013_R02C01
+Running Conumee for 9647455222_R02C02
+Running Conumee for 9741950013_R01C01
+[[1]]
+NULL
+
+[[2]]
+NULL
+
+[[3]]
+NULL
+
+[[4]]
+NULL
+
+[[5]]
+NULL
+
+[[6]]
+NULL
+
+[[7]]
+NULL
+
+[[8]]
+NULL
+
+[[9]]
+NULL
+
+[[10]]
+NULL
+
+[[11]]
+NULL
+
+[[12]]
+NULL
+
+[[13]]
+NULL
+
+[[14]]
+NULL
+
+[[15]]
+NULL
+
+[[16]]
+NULL
+
+[[17]]
+NULL
+
+[[18]]
+NULL
+
+[[19]]
+NULL
+
+[[20]]
+NULL
+
+[[21]]
+NULL
+
+[[22]]
+NULL
+
+[[23]]
+NULL
+
+[[24]]
+NULL
+
+[[25]]
+NULL
+
+[[26]]
+NULL
+
+[[27]]
+NULL
+
+[[28]]
+NULL
+
+[[29]]
+NULL
+
+[[30]]
+NULL
+
+[[31]]
+NULL
+
+[[32]]
+NULL
+
+[[33]]
+NULL
+
+[[34]]
+NULL
+
+[[35]]
+NULL
+
+[[36]]
+NULL
+
+[[37]]
+NULL
+
+[[38]]
+NULL
+
+[[39]]
+NULL
+
+[[40]]
+NULL
+
+[[41]]
+NULL
+
+[[42]]
+NULL
+
+[[43]]
+NULL
+
+[[44]]
+NULL
+
+[[45]]
+NULL
+
+[[46]]
+NULL
+
+[[47]]
+NULL
+
+[[48]]
+NULL
+
+[[49]]
+NULL
+
+[[50]]
+NULL
+
+[[51]]
+NULL
+
+[[52]]
+NULL
+
+[[53]]
+NULL
+
+[[54]]
+NULL
+
+[[55]]
+NULL
+
+[[56]]
+NULL
+
+[[57]]
+NULL
+
+[[58]]
+NULL
+
+[[59]]
+NULL
+
+[[60]]
+NULL
+
+[[61]]
+NULL
+
+[[62]]
+NULL
+
+[[63]]
+NULL
+
+[[64]]
+NULL
+
+[[65]]
+NULL
+
+[[66]]
+NULL
+
+[[67]]
+NULL
+
+[[68]]
+NULL
+
+[[69]]
+NULL
+
+[[70]]
+NULL
+
+[[71]]
+NULL
+
+[[72]]
+NULL
+
+[[73]]
+NULL
+
+[[74]]
+NULL
+
+[[75]]
+NULL
+
+[[76]]
+NULL
+
+[[77]]
+NULL
+
+[[78]]
+NULL
+
+[[79]]
+NULL
+
+[[80]]
+NULL
+
+[[81]]
+NULL
+
+[[82]]
+NULL
+
+[[83]]
+NULL
+
+[[84]]
+NULL
+
+[[85]]
+NULL
+
+[[86]]
+NULL
+
+[[87]]
+NULL
+
+[[88]]
+NULL
+
+[[89]]
+NULL
+
+[[90]]
+NULL
+
+[[91]]
+NULL
+
+[[92]]
+NULL
+
+[[93]]
+NULL
+
+[[94]]
+NULL
+
+[[95]]
+NULL
+
+[[96]]
+NULL
+
+[[97]]
+NULL
+
+[[98]]
+NULL
+
+[[99]]
+NULL
+
+[[100]]
+NULL
+
+[[101]]
+NULL
+
+[[102]]
+NULL
+
+[[103]]
+NULL
+
+[[104]]
+NULL
+
+[[105]]
+NULL
+
+[[106]]
+NULL
+
+[[107]]
+NULL
+
+[[108]]
+NULL
+
+[[109]]
+NULL
+
+[[110]]
+NULL
+
+[[111]]
+NULL
+
+[[112]]
+NULL
+
+[[113]]
+NULL
+
+[[114]]
+NULL
+
+[[115]]
+NULL
+
+[[116]]
+NULL
+
+[[117]]
+NULL
+
+[[118]]
+NULL
+
+[[119]]
+NULL
+
+[[120]]
+NULL
+
+[[121]]
+NULL
+
+[[122]]
+NULL
+
+[[123]]
+NULL
+
+[[124]]
+NULL
+
+[[125]]
+NULL
+
+[[126]]
+NULL
+
+[[127]]
+NULL
+
+[[128]]
+NULL
+
+[[129]]
+NULL
+
+[[130]]
+NULL
+
+[[131]]
+NULL
+
+[[132]]
+NULL
+
+[[133]]
+NULL
+
+[[134]]
+NULL
+
+[[135]]
+NULL
+
+[[136]]
+NULL
+
+[[137]]
+NULL
+
+[[138]]
+NULL
+
+[[139]]
+NULL
+
+[[140]]
+NULL
+
+[[141]]
+NULL
+
+[[142]]
+NULL
+
+[[143]]
+NULL
+
+[[144]]
+NULL
+
+[[145]]
+NULL
+
+[[146]]
+NULL
+
+[[147]]
+NULL
+
+[[148]]
+NULL
+
+[[149]]
+NULL
+
+[[150]]
+NULL
+
+[[151]]
+NULL
+
+[[152]]
+NULL
+
+[[153]]
+NULL
+
+[[154]]
+NULL
+
+[[155]]
+NULL
+
+[[156]]
+NULL
+
+[[157]]
+NULL
+
+[[158]]
+NULL
+
+[[159]]
+NULL
+
+[[160]]
+NULL
+
+[[161]]
+NULL
+
+[[162]]
+NULL
+
+[[163]]
+NULL
+
+[[164]]
+NULL
+
+[[165]]
+NULL
+
+[[166]]
+NULL
+
+[[167]]
+NULL
+
+[[168]]
+NULL
+
+[[169]]
+NULL
+
+[[170]]
+NULL
+
+[[171]]
+NULL
+
+[[172]]
+NULL
+
+[[173]]
+NULL
+
+[[174]]
+NULL
+
+[[175]]
+NULL
+
+[[176]]
+NULL
+
+[[177]]
+NULL
+
+[[178]]
+NULL
+
+[[179]]
+NULL
+
+[[180]]
+NULL
+
+[[181]]
+NULL
+
+[[182]]
+NULL
+
+[[183]]
+NULL
+
+[[184]]
+NULL
+
+[[185]]
+NULL
+
+[[186]]
+NULL
+
+[[187]]
+NULL
+
+[[188]]
+NULL
+
+[[189]]
+NULL
+
+[[190]]
+NULL
+
+[[191]]
+NULL
+
+[[192]]
+NULL
+
+[[193]]
+NULL
+
+[[194]]
+NULL
+
+[[195]]
+NULL
+
+[[196]]
+NULL
+
+[[197]]
+NULL
+
+[[198]]
+NULL
+
+[[199]]
+NULL
+
+[[200]]
+NULL
+
+[[201]]
+NULL
+
+[[202]]
+NULL
+
+[[203]]
+NULL
+
+[[204]]
+NULL
+
+[[205]]
+NULL
+
+[[206]]
+NULL
+
+[[207]]
+NULL
+
+[[208]]
+NULL
+
+[[209]]
+NULL
+
+[[210]]
+NULL
+
+[[211]]
+NULL
+
+[[212]]
+NULL
+
+[[213]]
+NULL
+
+[[214]]
+NULL
+
+[[215]]
+NULL
+
+[[216]]
+NULL
+
+[[217]]
+NULL
+
+[[218]]
+NULL
+
+[[219]]
+NULL
+
+[[220]]
+NULL
+
+[[221]]
+NULL
+
+[[222]]
+NULL
+
+[[223]]
+NULL
+
+[[224]]
+NULL
+
+
+
+--------------------------------------------------------------------------------
+|  JAX TORQUE EPILOGUE
+|
+|  Job ID: 4662340.helix-master
+|  Exit Status: 0
+|  Requested Resources:
+|      mem=30gb,nodes=1:ppn=24,walltime=24:00:00
+|  Resources Consumed:
+|      cput=02:30:09,mem=645031720kb,vmem=660940872kb,walltime=00:31:49
+|  Walltime accuracy: 2.2%
+|
+| Epilogue Host (TORQUE Mother Superior): helix122
+|
+--------------------------------------------------------------------------------

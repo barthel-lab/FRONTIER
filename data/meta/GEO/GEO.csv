@@ -1,0 +1,18 @@
+Basename,Array,Dataset,Source,Sample_Name,Patient,Sentrix_ID,Sentrix_Position,Disease,Sample_Type,Age,Gender
+/projects/barthf/MSG/data/idat/UCSF/8221916038_R01C02,IlluminaHumanMethylation450k,Controls,UCSF,A141_Adult_Insula,UCSF_Control,8221916038,R01C02,unknown,cortex,,
+/projects/barthf/MSG/data/idat/GSE60274/5806361047_R05C01,IlluminaHumanMethylation450k,Controls,GSE60274,Lobectomy NTB-2903,GSM1469033,5806361047,R05C01,epilepsy,cortex,79,F
+/projects/barthf/MSG/data/idat/GSE60274/5806361047_R06C01,IlluminaHumanMethylation450k,Controls,GSE60274,Craniotomy for Epilepsy NTB-1076,GSM1469034,5806361047,R06C01,epilepsy,cortex,69,M
+/projects/barthf/MSG/data/idat/GSE60274/5806361047_R01C02,IlluminaHumanMethylation450k,Controls,GSE60274,Craniotomy for Epilepsy NTB-1780,GSM1469035,5806361047,R01C02,epilepsy,cortex,,
+/projects/barthf/MSG/data/idat/GSE60274/5806361047_R02C02,IlluminaHumanMethylation450k,Controls,GSE60274,Craniotomy for Epilepsy NTB-2901,GSM1469036,5806361047,R02C02,epilepsy,cortex,34,F
+/projects/barthf/MSG/data/idat/GSE60274/5806361047_R03C02,IlluminaHumanMethylation450k,Controls,GSE60274,Craniotomy for Epilepsy NTB-2900,GSM1469037,5806361047,R03C02,epilepsy,cortex,44,F
+/projects/barthf/MSG/data/idat/GSE61160/5831559011_R02C01,IlluminaHumanMethylation450k,Controls,GSE61160,OC48,GSM1498781,5831559011,R02C01,post-mortem,cortex,,F
+/projects/barthf/MSG/data/idat/GSE61160/5831559011_R05C02,IlluminaHumanMethylation450k,Controls,GSE61160,OC49,GSM1498782,5831559011,R05C02,post-mortem,cortex,,F
+/projects/barthf/MSG/data/idat/GSE61160/5831559013_R02C02,IlluminaHumanMethylation450k,Controls,GSE61160,OC50,GSM1498783,5831559013,R02C02,post-mortem,cortex,,F
+/projects/barthf/MSG/data/idat/GSE61160/5831559018_R05C01,IlluminaHumanMethylation450k,Controls,GSE61160,OC51,GSM1498784,5831559018,R05C01,post-mortem,cortex,,M
+/projects/barthf/MSG/data/idat/GSE61160/6057825013_R01C01,IlluminaHumanMethylation450k,Controls,GSE61160,OC52,GSM1498785,6057825013,R01C01,post-mortem,cortex,,F
+/projects/barthf/MSG/data/idat/GSE79064/8221916079_R01C01,IlluminaHumanMethylation450k,Controls,GSE79064,COB05,GSM2084816,8221916079,R01C01,post-mortem,cortex,75,M
+/projects/barthf/MSG/data/idat/GSE79064/8221916079_R03C01,IlluminaHumanMethylation450k,Controls,GSE79064,COB 22_52,GSM2084818,8221916079,R03C01,post-mortem,cortex,77,M
+/projects/barthf/MSG/data/idat/GSE79064/8221916079_R04C02,IlluminaHumanMethylation450k,Controls,GSE79064,COB51,GSM2084825,8221916079,R04C02,post-mortem,cortex,54,M
+/projects/barthf/MSG/data/idat/GSE79064/8221932102_R02C01,IlluminaHumanMethylation450k,Controls,GSE79064,COB125,GSM2084829,8221932102,R02C01,post-mortem,cortex,72,M
+/projects/barthf/MSG/data/idat/GSE79064/8221932102_R03C01,IlluminaHumanMethylation450k,Controls,GSE79064,COB20_30,GSM2084830,8221932102,R03C01,post-mortem,cortex,74,M
+/projects/barthf/MSG/data/idat/GSE79064/8221932102_R04C01,IlluminaHumanMethylation450k,Controls,GSE79064,COB59,GSM2084831,8221932102,R04C01,post-mortem,cortex,21,M

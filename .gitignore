@@ -1,0 +1,14 @@
+.Rhistory
+.Rproj.user/**
+data/**
+manuscript/**
+!data/ref
+!data/meta
+sandbox/**
+documents/**
+results/**
+!results/qc
+*.Rdata
+*.RData
+*.Rda
+*.RDa

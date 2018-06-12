@@ -1,0 +1,10 @@
+## preprocess VUmc cluster
+library(minfi)
+library(IlluminaHumanMethylationEPICanno.ilm10b2.hg19)
+library(IlluminaHumanMethylationEPICmanifest)
+setwd("/projects/verbun/VUMC/Rdata")
+load("RGset.Rdata")
+RGset@annotation=c(array='IlluminaHumanMethylationEPIC', annotation='ilm10b2.hg19')
+save(RGset, file="RGset.RData")
+gRatioSet <- preprocessFunnorm(RGset)
+save(gRatioSet, file="gRatioSet.RData")
