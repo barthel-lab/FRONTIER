@@ -1,29 +1,40 @@
-## This script provides the initial pipeline starting with idat files from VUmc, Toronto and UCSF datasets + Controls
+##################################################
+## Project: FRONTIER
+## Script purpose: 
+## Provides the initial pipeline starting with idat files from VUmc, Toronto and UCSF datasets + Controls
 ## Idat files are processed into MethArray objects and beta and M values
+## Date: June 14, 2018
+## Author: Floris Barthel
+##################################################
 
-basedir = "~/projects/FRONTIER"
+basedir = here::here()
+
+## Master sample sheet
+sheet_file = "data/meta/Master_Sample_Sheet.csv"
+
+## Rdata of EPIC and 450k MSets for use with conumee
 raw_output_rda  = "results/FRONTIER.raw.Rdata"
-raw_meta_rda    = 'results/FRONTIER.raw_meta.Rdata'
-pre_output_rda  = "results/FRONTIER.normalized.Rdata"
+
+## Image of all output (generated using save.image)
 all_output_rda  = "results/FRONTIER.QC.filtered.normalized.anno.all_data.Rdata"
+
+## Rdata of filtered and normalized 450k and EPIC data (seperately)
 filt_output_rda = "results/FRONTIER.QC.filtered.normalized.anno.filt_only.Rdata"
 
+## Rdata of final merged data (all_data object)
 final_output_rda = "results/FRONTIER.QC.filtered.normalized.anno.final.Rdata"
 
-out_pdf_unfiltered = "results/EDA_VUmc_n5000_common_unfiltered.pdf"
-out_pdf_filtered = "results/EDA_VUmc_n5000_common_filtered.pdf"
-
+## Cross-reactive probes 450k
 reactive_probes_450 = "data/ref/48639-non-specific-probes-Illumina450k.xlsx"
-## cross reactive probes EPIC (McCartney et al 2016)
+
+## Cross-reactive probes EPIC (McCartney et al 2016)
 reactive_probes_EPIC = "/projects/verbun/IDATS_2018/Exclude_probes/cross_CPG.txt"
-##
 
 library(minfi)
 library(limma)
 library(RColorBrewer)
 library(tidyverse)
 library(wateRmelon)
-library()
 
 setwd(basedir)
 
@@ -31,7 +42,7 @@ setwd(basedir)
 # 1. Load Data
 ###
 
-targ = read.csv("data/meta/Master_Sample_Sheet.csv", as.is=T)
+targ = read.csv(sheet_file, as.is=T)
 
 il450k_targ = targ %>% filter(Array == "IlluminaHumanMethylation450k")
 il450k_data = read.metharray.exp(targets = il450k_targ, verbose = T)
@@ -41,6 +52,8 @@ ilEPIC_data = read.metharray.exp(targets = ilEPIC_targ, verbose = T, force = T)
 
 il450k_r = preprocessRaw(il450k_data)
 ilEPIC_r = preprocessRaw(ilEPIC_data)
+
+save(il450k_data, ilEPIC_data, file = raw_output_rda)
 
 ###
 # 2. Data QC
@@ -126,7 +139,7 @@ ilEPIC_g_filt.M = makeGenomicRatioSetFromMatrix(nM_EPIC,  rownames = NULL, pData
                                              mergeManifest = FALSE, what = "M")
 
 ## Save
-save(il450k_targ, ilEPIC_targ, il450k_g_filt, ilEPIC_g_filt, ilEPIC_g_filt.M, ilEPIC_g_filt.B, il450k_g_filt.B, il450k_g_filt.M file = filt_output_rda)
+#save(il450k_targ, ilEPIC_targ, il450k_g_filt, ilEPIC_g_filt, ilEPIC_g_filt.M, ilEPIC_g_filt.B, il450k_g_filt.B, il450k_g_filt.M file = filt_output_rda)
 
 ###
 # 6. Combine
@@ -141,6 +154,24 @@ save.image(file = all_output_rda)
 ###
 # 7. Diagnostic Plots
 ###
+
+### Plot B-value distribution pre- and post- normalization
+
+pdf(file='results/qc/normalization.pdf', width=8, height=16)
+
+par(mfrow=c(4,2))
+
+densityPlot(il450k_data, sampGroups=il450k_data$Dataset, main = "450k Raw", legend = FALSE)
+legend("top", legend = levels(factor(il450k_data$Dataset)), text.col = brewer.pal(8, "Dark2"), bty="n")
+densityPlot(getBeta(il450k_g), sampGroups = il450k_g$Dataset, main = "450k Normalized", legend = FALSE)
+legend("top", legend = levels(factor(il450k_g$Dataset)), text.col = brewer.pal(8, "Dark2"), bty="n")
+
+densityPlot(ilEPIC_data, sampGroups=ilEPIC_data$Dataset, main = "EPIC Raw", legend = FALSE)
+legend("top", legend = levels(factor(ilEPIC_data$Dataset)), text.col = brewer.pal(8, "Dark2"), bty="n")
+densityPlot(getBeta(ilEPIC_g), sampGroups = paste(ilEPIC_g$Dataset, ilEPIC_g$Batch), main = "EPIC Normalized", legend = FALSE)
+legend("top", legend = levels(factor(paste(ilEPIC_g$Dataset, ilEPIC_g$Batch))), text.col = brewer.pal(8, "Dark2"), bty="n")
+
+dev.off()
 
 #### Plot Detection P-values
 

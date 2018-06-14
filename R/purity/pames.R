@@ -1,3 +1,10 @@
+##################################################
+## Project: FRONTIER
+## Script purpose: Use the PAMES algorithm to calculate purity for samples of interest
+## Date: June 14, 2018
+## Author: Floris Barthel
+##################################################
+
 library(PAMES)
 
 setwd("~/projects/FRONTIER")

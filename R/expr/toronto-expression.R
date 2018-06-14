@@ -1,3 +1,10 @@
+##################################################
+## Project: FRONTIER
+## Script purpose: Take toronto gene expression matrix in text format, add gene names and save as Rdata
+## Date: June 14, 2018
+## Author: Floris Barthel
+##################################################
+
 library(affy)
 library(GEOquery)
 library(tidyverse)

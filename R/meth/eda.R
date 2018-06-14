@@ -1,4 +1,9 @@
-## This script performs additional and more in-depth exploratory data analyisis
+##################################################
+## Project: FRONTIER
+## Script purpose: Performs additional and more in-depth exploratory data analyisis
+## Date: June 14, 2018
+## Author: Floris Barthel
+##################################################
 
 library(minfi)
 library(limma)
@@ -8,7 +13,7 @@ library(GGally)
 
 out_pdf_comparison = "figures/PCA.pdf"
 
-setwd('~/projects/FRONTIER/')
+setwd(here::here())
 load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
 
 #####
