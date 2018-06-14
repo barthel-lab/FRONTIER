@@ -1,15 +1,15 @@
-setwd("~/projects/MSG")
+setwd("~/projects/FRONTIER")
 
 library(tidyverse)
 library(minfi)
 
 if(!exists('all_data'))
-  load('results/MSG.QC.filtered.normalized.anno.final.Rdata')
+  load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
 
-txpred    = read.csv('results/transcriptome/MSG.PredictWang2017.csv', as.is = T)
-txpred2   = read.csv('results/transcriptome/MSG.PredictVerhaak2010.csv', as.is = T)
-cellpred  = read.csv('results/meth/MSG.PredictCell2016.csv', as.is = T)
-pur       = read.csv('results/purity/PAMES.DKFZ_cortex.csv', as.is = T)
+txpred    = read.csv('results/transcriptome/FRONTIER.PredictWang2017.csv', as.is = T)
+txpred2   = read.csv('results/transcriptome/FRONTIER.PredictVerhaak2010.csv', as.is = T)
+cellpred  = read.csv('results/meth/FRONTIER.PredictCell2016.csv', as.is = T)
+pur       = read.csv('results/purity/FRONTIER.PAMES.DKFZ_cortex.csv', as.is = T)
 dist      = read.csv('results/imaging/Patient_Location_Stats.csv', as.is = T)
 hb        = read.delim('results/hb/MSG.HB_classification.tsv', as.is = T)
 
@@ -19,7 +19,6 @@ txpred = txpred %>% rename_all(funs(gsub("Tx", "Tx2017", .)))
 
 meta = pData(all_data) %>% 
   as.data.frame() %>% 
-  select(-Location) %>%
   mutate(Sentrix_Accession = basename(Basename)) %>% 
   left_join(hb) %>%
   left_join(cellpred) %>%
@@ -30,7 +29,7 @@ meta = pData(all_data) %>%
   group_by(Patient) %>%
   mutate(n_patient = sum(Dataset != 'DKFZ' & !grepl("^Rec", Sample_Type)), 
          n_pur = sum(purity > 0.5 & Dataset != 'DKFZ' & !grepl("^Rec", Sample_Type)),
-         IDH = ifelse(any(M.IDH == "IDH wt", na.rm = T), 'IDH wt', ifelse(any(M.IDH == "IDH mut", na.rm = T), 'IDH mut', NA))) %>%
+         IDH = NA) %>%
   ungroup() %>% # filter(n_patient > 1, n_pur > 0) %>% ## Drop patients w/ only a single sample & patients w/ only low purity samples
   mutate(Sample_Type2 = recode(Sample_Type, 'Recurrence' = 'Biopsy', 'Recurrence2' = 'Biopsy', 'Recurrence3' = 'Biopsy', 'Initial' = 'Biopsy'),
          purity_cat = cut(purity, breaks = c(0, 0.45, 0.59, 0.69, 1), labels = c("< 0.45", "0.45 - 0.59", "0.59 - 0.69", "> 0.69"), dig.lab = 2, include.lowest = T),
@@ -44,6 +43,6 @@ meta = pData(all_data) %>%
 rownames(meta) = meta$Sentrix_Accession
 pData(all_data) = DataFrame(meta)
 
-write.csv(meta, file = "results/MSG.QC.filtered.metadata.csv", quote = F, row.names = F)
-save(all_data, meta, file = 'results/MSG.QC.filtered.normalized.anno.final.meta.Rdata')
+write.csv(meta, file = "results/FRONTIER.QC.filtered.metadata.csv", quote = F, row.names = F)
+save(all_data, meta, file = 'results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 #rm(all_data, all_targ, txpred, cellpred, pur, dist)

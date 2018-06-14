@@ -2,13 +2,14 @@
 ## methylation probes to predict 
 
 library(tidyverse)
+library(minfi)
 
-setwd("~/projects/MSG/")
+setwd("~/projects/FRONTIER/")
 
 source("R/lib/liblinear-tools.R")
 
 ## Load MSG data
-load('results/MSG.QC.filtered.normalized.anno.final.meta.Rdata')
+load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
 
 ## Load TCGA methylation data (matrix supplied by Houtan & co.)
 load('data/tcgameth/LGG-GBM-heatmap.Rda')
@@ -83,7 +84,7 @@ real_res = lapply(c(as.list(unique(target))), function(x) multi_roc(real_pred, x
   mutate(cat_auc = sprintf("%s (N = %s, AUC = %s)", categ, n, formatC(auc,digits=2, format="f")))
 
 ## Print ROC to file
-pdf(file = 'results/qc/ROC-transcriptome-Verhaak2010.pdf', width=9, height=7)
+pdf(file = 'results/qc/ROC-transcriptome-verhaak2010.pdf', width=9, height=7)
 
 ggplot(real_res, aes(x = fpr, y = tpr, col = cat_auc)) + 
   geom_line() + 
@@ -119,5 +120,5 @@ colnames(prob) = sprintf("Tx_proba_%s", colnames(prob))
 tmp = data.frame(Sentrix_Accession = rownames(train_meta), Tx_Predict = as.character(all_predict$predictions),
                  stringsAsFactors = F) %>% cbind(prob)
 
-write.csv(tmp, file = 'results/transcriptome/MSG.PredictVerhaak2010.csv', row.names = F, quote = F)
+write.csv(tmp, file = 'results/transcriptome/FRONTIER.PredictVerhaak2010.csv', row.names = F, quote = F)
 

@@ -59,38 +59,35 @@ ilEPIC_detp = detectionP(ilEPIC_data)
 il450k_g = preprocessFunnorm(il450k_data)
 ilEPIC_g = preprocessFunnorm(ilEPIC_data)
 
-#qcReport(il450k_g, sampNames=il450k_targ$Sample_Name, sampGroups=il450k_targ$Dataset, pdf="results/qc/il450k_qc_norm.pdf")
-#qcReport(ilEPIC_data, sampNames=ilEPIC_targ$Sample_Name, sampGroups=ilEPIC_targ$Dataset, pdf="results/qc/ilEPIC_qc.pdf")
-
 ###
 # 4. Filter
 ###
 
 # ensure probes are in the same order in the mSetSq and detP objects
-il450k_detp = il450k_detp[match(featureNames(il450k_g),rownames(il450k_detp)), ]
-ilEPIC_detp = ilEPIC_detp[match(featureNames(ilEPIC_g),rownames(ilEPIC_detp)), ]
+il450k_detp_filt = il450k_detp[match(featureNames(il450k_g),rownames(il450k_detp)), ]
+ilEPIC_detp_filt = ilEPIC_detp[match(featureNames(ilEPIC_g),rownames(ilEPIC_detp)), ]
 
 ## CHECK samples are in the same order
-stopifnot(all(colnames(il450k_detp) == colnames(il450k_g)))
-stopifnot(all(colnames(ilEPIC_detp) == colnames(ilEPIC_g)))
+stopifnot(all(colnames(il450k_detp_filt) == colnames(il450k_g)))
+stopifnot(all(colnames(ilEPIC_detp_filt) == colnames(ilEPIC_g)))
 
 ## Drop samples with high average detection P-values
-il450k_g_filt = il450k_g[,which(colMeans(il450k_detp) < 0.01)]
-ilEPIC_g_filt = ilEPIC_g[,which(colMeans(ilEPIC_detp) < 0.01)]
+il450k_g_filt = il450k_g[,which(colMeans(il450k_detp_filt) < 0.01)]
+ilEPIC_g_filt = ilEPIC_g[,which(colMeans(ilEPIC_detp_filt) < 0.01)]
 
-il450k_detp = il450k_detp[,which(colMeans(il450k_detp) < 0.01)]
-ilEPIC_detp = ilEPIC_detp[,which(colMeans(ilEPIC_detp) < 0.01)]
+il450k_detp_filt = il450k_detp_filt[,which(colMeans(il450k_detp_filt) < 0.01)]
+ilEPIC_detp_filt = ilEPIC_detp_filt[,which(colMeans(ilEPIC_detp_filt) < 0.01)]
 
 ## Check probes
-table(rowSums(il450k_detp < 0.01) == ncol(il450k_g_filt) & !(featureNames(il450k_g_filt) %in% getAnnotation(il450k_g_filt)$Name[getAnnotation(il450k_g_filt)$chr %in% c("chrX", "chrY")]))
-table(rowSums(ilEPIC_detp < 0.01) == ncol(ilEPIC_g_filt) & !(featureNames(ilEPIC_g_filt) %in% getAnnotation(ilEPIC_g_filt)$Name[getAnnotation(ilEPIC_g_filt)$chr %in% c("chrX", "chrY")]))
+table(rowSums(il450k_detp_filt < 0.01) == ncol(il450k_g_filt) & !(featureNames(il450k_g_filt) %in% getAnnotation(il450k_g_filt)$Name[getAnnotation(il450k_g_filt)$chr %in% c("chrX", "chrY")]))
+table(rowSums(ilEPIC_detp_filt < 0.01) == ncol(ilEPIC_g_filt) & !(featureNames(ilEPIC_g_filt) %in% getAnnotation(ilEPIC_g_filt)$Name[getAnnotation(ilEPIC_g_filt)$chr %in% c("chrX", "chrY")]))
 
 ## Filter probes
 xReactiveProbes_450 = openxlsx::read.xlsx(reactive_probes_450)
 xReactiveProbes_EPIC = read.table(reactive_probes_EPIC)
 
-il450k_g_filt = il450k_g_filt[rowSums(il450k_detp < 0.01) == ncol(il450k_g_filt) & !(featureNames(il450k_g_filt) %in% xReactiveProbes_450$TargetID) & !(featureNames(il450k_g_filt) %in% getAnnotation(il450k_g_filt)$Name[getAnnotation(il450k_g_filt)$chr %in% c("chrX", "chrY")]),]
-ilEPIC_g_filt = ilEPIC_g_filt[rowSums(ilEPIC_detp < 0.01) == ncol(ilEPIC_g_filt) & !(featureNames(ilEPIC_g_filt) %in% xReactiveProbes_EPIC$V1) & !(featureNames(ilEPIC_g_filt) %in% getAnnotation(ilEPIC_g_filt)$Name[getAnnotation(ilEPIC_g_filt)$chr %in% c("chrX", "chrY")]),]
+il450k_g_filt = il450k_g_filt[rowSums(il450k_detp_filt < 0.01) == ncol(il450k_g_filt) & !(featureNames(il450k_g_filt) %in% xReactiveProbes_450$TargetID) & !(featureNames(il450k_g_filt) %in% getAnnotation(il450k_g_filt)$Name[getAnnotation(il450k_g_filt)$chr %in% c("chrX", "chrY")]),]
+ilEPIC_g_filt = ilEPIC_g_filt[rowSums(ilEPIC_detp_filt < 0.01) == ncol(ilEPIC_g_filt) & !(featureNames(ilEPIC_g_filt) %in% xReactiveProbes_EPIC$V1) & !(featureNames(ilEPIC_g_filt) %in% getAnnotation(ilEPIC_g_filt)$Name[getAnnotation(ilEPIC_g_filt)$chr %in% c("chrX", "chrY")]),]
 
 il450k_g_filt = dropLociWithSnps(il450k_g_filt)
 ilEPIC_g_filt = dropLociWithSnps(ilEPIC_g_filt)
@@ -206,3 +203,5 @@ plotMDS(mds_EPIC_post, main = paste("EPIC post-filter Patient", "PC", paste(dims
 legend("center", legend=levels(factor(pData(ilEPIC_g_filt)$Patient)), text.col = pal, bg="white", cex=0.7, bty="n", ncol=4)
 
 dev.off()
+
+## END ##
