@@ -8,7 +8,7 @@ library(ggplot2)
 source('R/lib/liblinear-tools.R')
 
 ## Load MSG data
-load('results/MSG.QC.filtered.normalized.anno.final.Rdata')
+load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
 
 ## Load TCGA methylation data (matrix supplied by Houtan & co.)
 load('data/tcgameth/LGG-GBM-heatmap.Rda')
@@ -119,5 +119,5 @@ tmp = data.frame(Sentrix_Accession = rownames(train_meta),
                  Cell_Predict = as.character(all_predict$predictions),
                  stringsAsFactors = F) %>% cbind(prob)
 
-#write.csv(tmp, file = 'results/meth/MSG.PredictCell2016.csv', row.names = F, quote = F)
+write.csv(tmp, file = 'results/meth/FRONTIER.PredictCell2016.csv', row.names = F, quote = F)
 
