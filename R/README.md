@@ -3,6 +3,9 @@
 ### cnv/conumee-cnv.R
 The R package `conumee` was used to estimate copy number from 450k and EPIC data.
 
+### cnv/cnv-matrix-cluster.R
+Sample-only clustering of CNV, across chromosomes.
+
 ### expr/runssgsea-toronto.R
 We used `ssGSEA` to determine transcriptional clusters (Verhaak 2010, 2013 revision or Wang 2017) for a set of Toronto samples with matching 450k methylation and U133 RNA microarray. 
 

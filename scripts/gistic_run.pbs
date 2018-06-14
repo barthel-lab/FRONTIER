@@ -6,10 +6,16 @@
 #PBS -m a
 #PBS -l nodes=1:ppn=8,walltime=24:00:00
 #PBS -l mem=24gb
-BD=/projects/barthf/MSG/results/gistic
-SEG=/projects/barthf/MSG/results/conumee/MSG.conumee.seg
-MK=/projects/barthf/MSG/data/ref/Illumina450k.conumee_markers.txt
-REFGENE=/projects/barthf/FRONTIER/data/ref/hg19_v19.mat
+
+BD_450K=/projects/verhaak-lab/FRONTIER/results/gistic/il450k
+BD_EPIC=/projects/verhaak-lab/FRONTIER/results/gistic/ilEPIC
+SEG_450K=/projects/verhaak-lab/FRONTIER/results/conumee/FRONTIER.conumee_450k.seg
+SEG_EPIC=/projects/verhaak-lab/FRONTIER/results/conumee/FRONTIER.conumee_EPIC.seg
+MK_450K=/projects/verhaak-lab/FRONTIER/results/conumee/FRONTIER.conumee_markers_450k.txt
+MK_EPIC=/projects/verhaak-lab/FRONTIER/results/conumee/FRONTIER.conumee_markers_EPIC.txt
+REFGENE=/projects/verhaak-lab/FRONTIER/data/ref/hg19_v19.mat
 CNV=/home/barthf/opt/GISTIC_2_0_22/ref/CNV.hg19.bypos.111213.txt
-0
-/home/barthf/opt/GISTIC_2_0_23/gistic_run -b $BD -seg $SEG -mk $MK -cnv $CNV -refgene $REFGENE -genegistic 1 -smallmem 1 -broad 1 -brlen 0.5 -conf 0.99 -armpeel 1 -savegene 1 -gcm extreme -v 25 -rx 0 -maxspace 1 -js 1 -cap 0.5 -td 0.05 -ta 0.05
+
+/home/barthf/opt/GISTIC_2_0_23/gistic_run -b $BD_450K -seg $SEG_450K -mk $MK_450K -cnv $CNV -refgene $REFGENE -genegistic 1 -smallmem 1 -broad 1 -brlen 0.5 -conf 0.99 -armpeel 1 -savegene 1 -gcm extreme -v 25 -rx 0 -maxspace 1 -js 1 -cap 0.5 -td 0.05 -ta 0.05
+
+/home/barthf/opt/GISTIC_2_0_23/gistic_run -b $BD_EPIC -seg $SEG_EPIC -mk $MK_EPIC -cnv $CNV -refgene $REFGENE -genegistic 1 -smallmem 1 -broad 1 -brlen 0.5 -conf 0.99 -armpeel 1 -savegene 1 -gcm extreme -v 25 -rx 0 -maxspace 1 -js 1 -cap 0.5 -td 0.05 -ta 0.05
