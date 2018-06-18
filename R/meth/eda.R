@@ -14,7 +14,7 @@ library(GGally)
 out_pdf_comparison = "figures/PCA.pdf"
 
 setwd(here::here())
-load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
+load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 
 #####
 ## PCA of all samples
@@ -26,12 +26,18 @@ all_probes = order(-apply(getM(all_data), 1, var))[1:5000]
 all_dat = t(getM(all_data)[all_probes,])
 ## perform pca
 all_pca = prcomp(all_dat)
+## perform k-means
+k2 = kmeans(all_dat, 2)
+k3 = kmeans(all_dat, 3)
 ## merge metadata and results
 all_meta = data.frame(all_pca$x[,1:6]) %>% #(x = all_mds$x, y = all_mds$y) %>% 
   rownames_to_column("Sentrix_Accession") %>% 
   left_join(as.data.frame(pData(all_data))) %>%
   mutate(PC1var = round(((all_pca$sdev^2)[1]/sum(all_pca$sdev^2)) * 100, 1),
-         PC2var = round(((all_pca$sdev^2)[2]/sum(all_pca$sdev^2)) * 100, 1))
+         PC2var = round(((all_pca$sdev^2)[2]/sum(all_pca$sdev^2)) * 100, 1),
+         k2 = factor(unname(k2$cluster)),
+         k3 = factor(unname(k3$cluster)))
+
 
 #####
 ## sub-clustering - IDH wt
@@ -80,7 +86,7 @@ ggplot(all_meta, aes(x = PC1, y = PC2, shape = Dataset, color = Sample_Type)) + 
   theme_minimal(base_size = 18, base_family = "sans")
 
 ## PCA - all samples
-ggplot(all_meta, aes(x = PC1, y = PC2, color = Cell_Predict2, size = purity_cat, shape = Dataset2, alpha = dist_cat)) + geom_point() + 
+ggplot(all_meta, aes(x = PC1, y = PC2, color = k3, size = purity_cat, shape = Dataset2, alpha = dist_cat)) + geom_point() + 
   scale_size_manual(values = c(2:5), na.value = 2) +
   scale_alpha_manual(values = c(1,0.75,0.5,0.25), na.value = 0.5) +
   labs(x = sprintf("PC1 (%s%%)", all_meta$PC1var), y = sprintf("PC2 (%s%%)", all_meta$PC2var), size = "Purity", color = "Methylation Class", shape = "Dataset", alpha = "Distance to \ntumor surface") +

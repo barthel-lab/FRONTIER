@@ -1,8 +1,23 @@
+##################################################
+## Project: FRONTIER
+## Script purpose: Compute gene-wise CNV events, also includes chr arms
+## Date: June 18, 2018
+## Author: Floris Barthel
+##################################################
 
-setwd("~/projects/MSG/")
+datadir                 = "/projects/verhaak-lab/FRONTIER"
+segfile                 = sprintf('%s/results/conumee/FRONTIER.conumee.seg', datadir)
+genesf                  = 'data/ref/FRONTIER.genemeta.tsv'
+selected_genes_outfile  = 'results/conumee/MSG.selected_genes.CNV.txt'
 
-segfile = 'results/conumee/MSG.conumee.seg'
-genesf  = 'data/ref/MSG.genemeta.tsv'
+##################################################
+
+library(tidyverse)
+library(GenomicRanges)
+
+setwd(here::here())
+
+##################################################
 
 ## Load segmentation
 seg = read.delim(segfile, as.is = T)
@@ -39,7 +54,7 @@ getCNVPerSample <- function(inputSample, inputGenes) {
     as.data.frame() %>% 
     mutate(gene = inputGenes$gene[queryHits]) %>%
     group_by(gene) %>% 
-    summarize(num = n(), sum = sum(inputSample$Segment_Mean[subjectHits]), mean = mean(inputSample$Segment_Mean[subjectHits])) %>% 
+    summarize(num = n(), sum = sum(inputSample$Segment_Mean[subjectHits]), mean = weighted.mean(inputSample$Segment_Mean[subjectHits], inputSample$Num_Probes[subjectHits])) %>% 
     ungroup()
   
   stopifnot(nrow(res) == length(gener))
@@ -56,7 +71,7 @@ cnvmat = sapply(genesample, function(x) x$mean)
 rownames(cnvmat) = apply(sapply(genesample, function(x) x$gene),1,unique)
 
 ## tot hier code voor gene x sample x cnv matrix
-write.table(cnvmat, file = 'results/conumee/MSG.selected_genes.CNV.txt', sep = '\t', quote = F, row.names = T, col.names = T)
+write.table(cnvmat, file = selected_genes_outfile, sep = '\t', quote = F, row.names = T, col.names = T)
 
 ##
 ##

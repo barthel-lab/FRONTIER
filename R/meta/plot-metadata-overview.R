@@ -1,3 +1,11 @@
+##################################################
+## Project: FRONTIER
+## Script purpose: Plot a sample-by-sample (grouped by Patient) overview
+## Date: June 18, 2018
+## Author: Floris Barthel
+##################################################
+
+setwd(here::here())
 
 library(ggplot2)
 library(grid)
@@ -7,23 +15,18 @@ library(egg)
 library(tidyverse)
 library(RColorBrewer)
 
-#### import meta
+##################################################
 
-# source('R/make-master-table.R')
-load('results/MSG.QC.filtered.normalized.anno.final.meta.Rdata')
+## import meta
+load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 
-## 2018 - 03 - 09 edited code to use verhaak 2010 for transcriptome
+##################################################
 
-## Add verhaak classifier
-vrhk = read.csv('results/transcriptome/MSG.PredictVerhaak2010.csv', as.is = T)
-
-#### Sort by purity
+## Sort by purity
 
 meta = pData(all_data) %>% as.data.frame() %>%
   filter(Dataset != "DKFZ", n_patient > 1, !grepl("^Rec", Sample_Type)) %>%
   arrange(purity) %>% 
-  select(-starts_with("Tx_")) %>%
-  left_join(vrhk) %>%
   mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = unique(Sentrix_Accession))) %>%
   mutate(Dist_to_tumor_surface = ifelse(is.na(Dist_to_tumor_surface), 0, Dist_to_tumor_surface)) %>%
   mutate(Patient = gsub("\\-", "\n", Patient)) %>%
@@ -31,15 +34,31 @@ meta = pData(all_data) %>% as.data.frame() %>%
 
 sample_order = levels(meta$Sentrix_Accession)
 
-#### Plot purity
+## Plot histology/grade
+tmp = meta %>% 
+  select(Sentrix_Accession, Patient, Histology, Grade) %>%
+  gather(key = "variable", value="value", Histology, Grade) %>%
+  mutate(value = factor(value, levels = c(sort(unique(meta$Histology)), sort(unique(meta$Grade))))) %>%
+  mutate(y = "Phenotype")
+
+p0 = ggplot() + 
+  geom_tile(data = tmp, aes(x = Sentrix_Accession, y = variable, fill = value), color = "black") +
+  labs(y = "Phenotype", fill = "Grade/Histology") 
+
+p0
+
+## Plot purity
 
 p1 = ggplot() + 
   geom_bar(data = meta, aes(x=Sentrix_Accession, y=purity), fill = "#999999", color = "black", size = 0.25, stat = "identity") +
-  labs(y = "Purity", fill = "Purity group")
+  labs(y = "Purity", fill = "Purity group") +
+  geom_hline(yintercept=0.5, linetype = 2) 
 
 p1
 
-#### Plot distance
+##################################################
+
+## Plot distance
 
 p2 = ggplot() + 
   geom_bar(data = meta, aes(x=Sentrix_Accession, y=Dist_to_tumor_surface, fill = Location), color = "black", size = 0.25, stat = "identity") +
@@ -48,7 +67,10 @@ p2 = ggplot() +
 
 p2
 
-#### Plot methylation class result
+##################################################
+
+## Plot methylation class result
+
 tmp = meta %>% 
   select(Sentrix_Accession, Patient, Cell_Predict) %>%
   mutate(y = "Methylation class")
@@ -76,7 +98,7 @@ p4
 
 #### Plot transcriptome class result
 tmp = meta %>% 
-  select(Sentrix_Accession, Patient, Tx_Predict) %>%
+  select(Sentrix_Accession, Patient, Tx_Predict = Tx2010_Predict) %>%
   mutate(y = "Transcription class")
 
 p5 = ggplot() + 
@@ -88,7 +110,7 @@ p5
 
 #### Plot transcriptome class predictions
 tmp = meta %>% 
-  select(Sentrix_Accession, Patient, starts_with("Tx_proba")) %>%
+  select(Sentrix_Accession, Patient, starts_with("Tx2010_proba")) %>%
   gather("Class", "Prediction", -Sentrix_Accession, -Patient) %>%
   mutate(Class = gsub("\\.", "-", substr(Class, 10, nchar(Class))))
 
@@ -99,19 +121,33 @@ p6 = ggplot() +
 
 p6
 
-#### Load arm CNV
+#### Load Arm + Gene CNV
 
-armcnv = read.delim('results/gistic/broad_values_by_arm.txt', as.is=T, check.names=F)
-colnames(armcnv)[1] = "Arm"
-armcnv = armcnv %>%
-  gather('Sentrix_Accession','CNV', -Arm) %>% 
+eventcnv = read.delim('results/conumee/MSG.selected_genes.CNV.txt', as.is = T, check.names = F)
+drivergenes = openxlsx::read.xlsx('data/ref/glioma_driver_genes.xlsx')
+genecnv = eventcnv %>% 
+  as.data.frame() %>% 
+  rownames_to_column("gene") %>%
+  gather('Sentrix_Accession', 'CNV', -gene) %>%
+  left_join(drivergenes) %>%
+  filter(complete.cases(pathway)) %>%
+  mutate(CNV = factor(ifelse(effect == 'amplification' & CNV > 0.1, "+1", ifelse(effect == 'deletion' & CNV < -0.1, "-1", "0")), levels = c("-1", "0", "+1"))) %>% 
+  left_join(meta) %>% 
+  filter(complete.cases(Patient)) %>%
+  mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = sample_order))
+
+armcnv = eventcnv %>%
+  as.data.frame() %>% 
+  rownames_to_column("event") %>%
+  gather('Sentrix_Accession', 'CNV', -event) %>%
+  mutate(arm = event) %>%
   group_by(Sentrix_Accession) %>% 
-  summarize(Codel1p19q = ifelse(CNV[Arm == '1p'] < -0.1 & CNV[Arm == '19q'] < -0.1, 1, 0),
-            Gain7Loss10 = ifelse(CNV[Arm == '10p'] < -0.1 & CNV[Arm == '10q'] < -0.1 & CNV[Arm == '7p'] > 0.1 & CNV[Arm == '7q'] > 0.1, 1, 0),
-            Gain19Gain20 = ifelse(CNV[Arm == '19p'] > 0.1 & CNV[Arm == '19q'] > 0.1 & CNV[Arm == '20p'] > 0.1 & CNV[Arm == '20q'] > 0.1, 1, 0)) %>% 
+  summarize(Codel1p19q = ifelse(CNV[arm == 'chr1p'] < -0.1 & CNV[arm == 'chr19q'] < -0.1, 1, 0),
+            Gain7Loss10 = ifelse(CNV[arm == 'chr10'] < -0.1 & CNV[arm == 'chr7'] > 0.1, 1, 0),
+            Gain19Gain20 = ifelse(CNV[arm == 'chr19'] > 0.1 & CNV[arm == 'chr20'] > 0.1, 1, 0)) %>% 
   ungroup() %>%
   left_join(meta) %>% 
-  mutate(IDH = ifelse(IDH == "IDH mut", 1, 0)) %>%
+  mutate(IDH = ifelse(IDH_Predict == "Mutant", 1, 0)) %>%
   filter(complete.cases(Patient)) %>%
   select(Sentrix_Accession, Patient, Codel1p19q, Gain7Loss10, Gain19Gain20, IDH) %>%
   gather("variable", "value", Codel1p19q, Gain7Loss10, Gain19Gain20, IDH) %>%
@@ -128,21 +164,6 @@ p7 = ggplot() +
   labs(y="", fill = "Alteration status")
 
 p7
-
-#### Load Gene CNV
-
-genecnv = read.delim('results/conumee/MSG.selected_genes.CNV.txt', as.is = T, check.names = F)
-drivergenes = openxlsx::read.xlsx('data/ref/glioma_driver_genes.xlsx')
-genecnv = genecnv %>% 
-  as.data.frame() %>% 
-  rownames_to_column("gene") %>%
-  gather('Sentrix_Accession', 'CNV', -gene) %>%
-  left_join(drivergenes) %>%
-  filter(complete.cases(pathway)) %>%
-  mutate(CNV = factor(ifelse(effect == 'amplification' & CNV > 0.1, "+1", ifelse(effect == 'deletion' & CNV < -0.1, "-1", "0")), levels = c("-1", "0", "+1"))) %>% 
-  left_join(meta) %>% 
-  filter(complete.cases(Patient)) %>%
-  mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = sample_order))
 
 ##### Plot Gene CNV
 
@@ -178,6 +199,7 @@ plot_grid = facet_grid(. ~ Patient, scales = "free_x", space = "free")
 gene_grid = facet_grid(pathway ~ Patient, scales = "free", space = "free")
 
 # ## Legends
+gleg0 = g_legend(p0)
 # gleg1 = g_legend(p1) 
 gleg2 = g_legend(p2) 
 gleg3 = g_legend(p3)
@@ -192,7 +214,8 @@ plot_grid = facet_grid(. ~ Patient, scales = "free_x", space = "free") #NULL
 gene_grid = facet_grid(pathway ~ Patient, scales = "free", space = "free")
 
 ## Plots
-g1 = ggplotGrob(p1 + plot_grid + g_theme + null_legend + null_x + top_margin)                  %>% gtable_frame()
+g0 = ggplotGrob(p0 + plot_grid + g_theme + null_legend + null_x + top_margin)                  %>% gtable_frame()
+g1 = ggplotGrob(p1 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g2 = ggplotGrob(p2 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g3 = ggplotGrob(p3 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g4 = ggplotGrob(p4 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
@@ -201,19 +224,19 @@ g6 = ggplotGrob(p6 + plot_grid + g_theme + null_legend + null_x + null_facet + m
 g7 = ggplotGrob(p7 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g8 = ggplotGrob(p8 + gene_grid + g_theme + null_legend + bottom_x + null_facet + bottom_margin)           %>% gtable_frame()
 
-g = gtable_rbind(g1, g2, g3, g4, g5, g6, g7, g8)
-gleg = gtable_rbind(gleg2, gleg3, gleg4, gleg5, gleg6, gleg7, gleg8)
+g = gtable_rbind(g0, g1, g2, g3, g4, g5, g6, g7, g8)
+gleg = gtable_rbind(gleg0, gleg2, gleg3, gleg4, gleg5, gleg6, gleg7, gleg8)
 
 ## Adjust relative height of panels
 panels = g$layout$t[grep("panel", g$layout$name)]
-g$heights[panels] <- unit(c(1.5,1.5,0.5,4,0.5,1.5,2,6), "null")
+g$heights[panels] <- unit(c(0.8,1.5,1.5,0.5,4,0.5,1.5,2,6), "null")
 
-pdf(file = "figures/HM_v3_Verhaak2010.pdf", width = 10, height = 12)
+pdf(file = "figures/HM_v6_Verhaak2010.pdf", width = 10, height = 12)
 grid.newpage()
 grid.draw(g)
 dev.off()
 
-pdf(file = "figures/legend_v2.pdf", width = 4, height = 12)
+pdf(file = "figures/legend_v6.pdf", width = 4, height = 12)
 grid.newpage()
 grid.draw(gleg)
 dev.off()

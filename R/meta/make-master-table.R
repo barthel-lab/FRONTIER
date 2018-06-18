@@ -16,6 +16,8 @@ if(!exists('all_data'))
 txpred    = read.csv('results/transcriptome/FRONTIER.PredictWang2017.csv', as.is = T)
 txpred2   = read.csv('results/transcriptome/FRONTIER.PredictVerhaak2010.csv', as.is = T)
 cellpred  = read.csv('results/meth/FRONTIER.PredictCell2016.csv', as.is = T)
+idhpred   = read.csv('results/meth/FRONTIER.PredictIDH.csv', as.is = T) %>% dplyr::rename(IDH_Predict = Cell_Predict)
+tvsnpred  = read.csv('results/meth/FRONTIER.PredictTvsN.csv', as.is = T) %>% dplyr::rename(TvsN_Predict = Cell_Predict)
 pur       = read.csv('results/purity/FRONTIER.PAMES.DKFZ_cortex.csv', as.is = T)
 dist      = read.csv('results/imaging/Patient_Location_Stats.csv', as.is = T)
 hb        = read.delim('results/hb/MSG.HB_classification.tsv', as.is = T)
@@ -26,11 +28,12 @@ txpred = txpred %>% rename_all(funs(gsub("Tx", "Tx2017", .)))
 
 meta = pData(all_data) %>% 
   as.data.frame() %>% 
-  mutate(Sentrix_Accession = basename(Basename)) %>% 
   left_join(hb) %>%
   left_join(cellpred) %>%
   left_join(txpred) %>%
   left_join(txpred2) %>%
+  left_join(idhpred) %>%
+  left_join(tvsnpred) %>%
   left_join(pur) %>%
   left_join(dist) %>%
   group_by(Patient) %>%
