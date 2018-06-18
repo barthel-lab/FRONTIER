@@ -12,3 +12,4 @@ results/**
 *.RData
 *.Rda
 *.RDa
+.Rproj.user
