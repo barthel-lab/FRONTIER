@@ -6,42 +6,73 @@
 ##################################################
 
 library(PAMES)
+library(tidyverse)
 
-setwd("~/projects/FRONTIER")
+setwd(here::here())
+
+## Load FRONTIER methylation data
 load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
 
-test  = getBeta(all_data)[,all_data$Dataset != "DKFZ"]
-train = getBeta(all_data)[,all_data$Dataset == "DKFZ"]
+## Get beta
+all_b = minfi::getBeta(all_data)
 
-auc_data = compute_AUC(test, train)
-sites_data = select_informative_islands(test, auc_data, max_sites = 20)
+## Load TCGA methylation data (matrix supplied by Houtan & co.)
+load("data/tcgameth/LGG-GBM-450k-data.Rdata")
+
+## Transform as appropriate
+tcgameth = t(hm)
+colnames(tcgameth) = substr(colnames(tcgameth),1,12)
+
+## Load metadata from Ceccarelli 2016 (Cell paper)
+# tcgameta = openxlsx::read.xlsx('data/ref/Ceccarelli2016.xlsx', startRow = 2)
+# tcgameta = tcgameta %>% 
+#   filter(complete.cases(Supervised.DNA.Methylation.Cluster), 
+#          ABSOLUTE.purity > 0.9,
+#          Case %in% colnames(tcgameth)) %>% 
+#   select(Case, ABSOLUTE.purity)
+
+## Select probes
+selected_probes = intersect(rownames(tcgameth), rownames(all_b)) #Reduce(intersect, list(colnames(tcgameth), rownames(trnt_b), rownames(ucsf_b), rownames(vumc_b)))
+
+## Deterine testing test
+test = all_b[selected_probes, all_data$Dataset != "DKFZ"]
+
+## Determine training set (tumor samples)
+train_tum = tcgameth[selected_probes, ] #tcgameth[selected_probes, tcgameta$Case]
+
+## Determine training set (normal controls)
+train_nor = all_b[selected_probes, all_data$Dataset == "DKFZ" & all_data$Sample_Type == "Cortex"]
+
+## Run PAMES
+auc_data = compute_AUC(train_tum, train_nor)
+sites_data = select_informative_islands(train_tum, auc_data, max_sites = 20)
 purity = compute_purity(test, sites_data)
 
-write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/PAMES.purity.csv', row.names = F)
+write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/FRONTIER.PAMES.purity_cortex_v5.csv', row.names = F)
 plot(density(purity))
 
 ###
 
-test  = getBeta(all_data)[,all_data$Dataset != "DKFZ"]
-idx = which(all_data$Sample_Type == "Cortex" | all_data$Sample_Type == "Granulation")
-train = getBeta(all_data)[,idx]
-
-auc_data = compute_AUC(test, train)
-sites_data = select_informative_islands(test, auc_data, max_sites = 20)
-purity = compute_purity(test, sites_data)
-
-write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/PAMES.cortex_granulation.csv', row.names = F)
-plot(density(purity))
-
-###
-
-test  = getBeta(all_data)[,all_data$Dataset != "DKFZ"]
-idx = which(all_data$Sample_Type == "Cortex")
-train = getBeta(all_data)[,idx]
-
-auc_data = compute_AUC(test, train)
-sites_data = select_informative_islands(test, auc_data, max_sites = 20)
-purity = compute_purity(test, sites_data)
-
-write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/PAMES.DKFZ_cortex.csv', row.names = F)
-plot(density(purity))
+# test  = getBeta(all_data)[,all_data$Dataset != "DKFZ"]
+# idx = which(all_data$Sample_Type == "Cortex" | all_data$Sample_Type == "Granulation")
+# train = getBeta(all_data)[,idx]
+# 
+# auc_data = compute_AUC(test, train)
+# sites_data = select_informative_islands(test, auc_data, max_sites = 20)
+# purity = compute_purity(test, sites_data)
+# 
+# write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/PAMES.cortex_granulation.csv', row.names = F)
+# plot(density(purity))
+# 
+# ###
+# 
+# test  = getBeta(all_data)[,all_data$Dataset != "DKFZ"]
+# idx = which(all_data$Sample_Type == "Cortex")
+# train = getBeta(all_data)[,idx]
+# 
+# auc_data = compute_AUC(test, train)
+# sites_data = select_informative_islands(test, auc_data, max_sites = 20)
+# purity = compute_purity(test, sites_data)
+# 
+# write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/PAMES.DKFZ_cortex.csv', row.names = F)
+# plot(density(purity))
