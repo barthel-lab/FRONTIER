@@ -1,9 +1,6 @@
 .Rhistory
 .Rproj.user/**
-data/**
 manuscript/**
-!data/ref
-!data/meta
 sandbox/**
 documents/**
 results/**
