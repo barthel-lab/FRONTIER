@@ -45,10 +45,10 @@ train_nor = all_b[selected_probes, all_data$Dataset == "DKFZ" & all_data$Sample_
 
 ## Run PAMES
 auc_data = compute_AUC(train_tum, train_nor)
-sites_data = select_informative_islands(train_tum, auc_data, max_sites = 20)
+sites_data = select_informative_islands(test, auc_data, max_sites = 20)
 purity = compute_purity(test, sites_data)
 
-write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/FRONTIER.PAMES.purity_cortex_v5.csv', row.names = F)
+write.csv(data.frame(Sentrix_Accession = names(purity), purity = purity, stringsAsFactors = F, row.names = NULL), file = 'results/purity/FRONTIER.PAMES.purity_cortex_450k_TCGA_v2.csv', row.names = F)
 plot(density(purity))
 
 ###

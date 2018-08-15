@@ -3,8 +3,8 @@
 ## Script purpose: 
 ## Provides the initial pipeline starting with idat files from VUmc, Toronto and UCSF datasets + Controls
 ## Idat files are processed into MethArray objects and beta and M values
-## Date: June 14, 2018
-## Author: Floris Barthel
+## Date: August 15, 2018
+## Author: Floris Barthel, Niels Verburg
 ##################################################
 
 basedir = here::here()

@@ -18,11 +18,7 @@ txpred2   = read.csv('results/transcriptome/FRONTIER.PredictVerhaak2010.csv', as
 cellpred  = read.csv('results/meth/FRONTIER.PredictCell2016.csv', as.is = T)
 idhpred   = read.csv('results/meth/FRONTIER.PredictIDH.csv', as.is = T) %>% dplyr::rename(IDH_Predict = Cell_Predict)
 tvsnpred  = read.csv('results/meth/FRONTIER.PredictTvsN.csv', as.is = T) %>% dplyr::rename(TvsN_Predict = Cell_Predict)
-pur       = read.csv('results/purity/FRONTIER.PAMES.DKFZ_cortex.csv', as.is = T)
-pur2      = read.csv('results/purity/FRONTIER.PAMES.purity_cortex_v2.csv', as.is = T) %>% dplyr::rename(purity2 = purity)
-pur3      = read.csv('results/purity/FRONTIER.PAMES.purity_cortex_v3.csv', as.is = T) %>% dplyr::rename(purity3 = purity)
-pur4      = read.csv('results/purity/FRONTIER.PAMES.purity_cortex_v4.csv', as.is = T) %>% dplyr::rename(purity4 = purity)
-pur5      = read.csv('results/purity/FRONTIER.PAMES.purity_cortex_v5.csv', as.is = T) %>% dplyr::rename(purity5 = purity)
+pur       = read.csv('results/purity/FRONTIER.PAMES.purity_cortex_450k_TCGA_v2.csv', as.is = T)
 dist      = read.csv('results/imaging/Patient_Location_Stats.csv', as.is = T)
 hb        = read.delim('results/hb/MSG.HB_classification.tsv', as.is = T)
 
@@ -39,10 +35,6 @@ meta = pData(all_data) %>%
   left_join(idhpred) %>%
   left_join(tvsnpred) %>%
   left_join(pur) %>%
-  left_join(pur2) %>%
-  left_join(pur3) %>%
-  left_join(pur4) %>%
-  left_join(pur5) %>%
   left_join(dist) %>%
   group_by(Patient) %>%
   mutate(n_patient = sum(Dataset != 'DKFZ' & !grepl("^Rec", Sample_Type)), 

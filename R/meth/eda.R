@@ -78,7 +78,7 @@ mt_meta = data.frame(mt_pca$x[,1:6]) %>%
 
 ############
 
-pdf(file = "figures/PCA.pdf", width=12, height=10)
+pdf(file = "figures/PCA_v2.pdf", width=12, height=10)
 
 ## PCA - all samples, limited variables
 ggplot(all_meta, aes(x = PC1, y = PC2, shape = Dataset, color = Sample_Type)) + geom_point() + 
@@ -86,7 +86,7 @@ ggplot(all_meta, aes(x = PC1, y = PC2, shape = Dataset, color = Sample_Type)) + 
   theme_minimal(base_size = 18, base_family = "sans")
 
 ## PCA - all samples
-ggplot(all_meta, aes(x = PC1, y = PC2, color = k3, size = purity_cat, shape = Dataset2, alpha = dist_cat)) + geom_point() + 
+ggplot(all_meta, aes(x = PC1, y = PC2, color = Cell_Predict2, size = purity_cat, shape = Dataset2, alpha = dist_cat)) + geom_point() + 
   scale_size_manual(values = c(2:5), na.value = 2) +
   scale_alpha_manual(values = c(1,0.75,0.5,0.25), na.value = 0.5) +
   labs(x = sprintf("PC1 (%s%%)", all_meta$PC1var), y = sprintf("PC2 (%s%%)", all_meta$PC2var), size = "Purity", color = "Methylation Class", shape = "Dataset", alpha = "Distance to \ntumor surface") +

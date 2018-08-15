@@ -30,7 +30,8 @@ meta = pData(all_data) %>% as.data.frame() %>%
   mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = unique(Sentrix_Accession))) %>%
   mutate(Dist_to_tumor_surface = ifelse(is.na(Dist_to_tumor_surface), 0, Dist_to_tumor_surface)) %>%
   mutate(Patient = gsub("\\-", "\n", Patient)) %>%
-  mutate(Cell_Predict = factor(Cell_Predict, levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Cortex"))))
+  mutate(Cell_Predict = factor(Cell_Predict, levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Cortex")))) %>%
+  filter(Batch == 1, Dataset == "VUmc")
 
 sample_order = levels(meta$Sentrix_Accession)
 
@@ -43,7 +44,7 @@ tmp = meta %>%
 
 p0 = ggplot() + 
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = variable, fill = value), color = "black") +
-  labs(y = "Phenotype", fill = "Grade/Histology") 
+  labs(y = "", fill = "Grade/Histology") 
 
 p0
 
@@ -62,7 +63,7 @@ p1
 
 p2 = ggplot() + 
   geom_bar(data = meta, aes(x=Sentrix_Accession, y=Dist_to_tumor_surface, fill = Location), color = "black", size = 0.25, stat = "identity") +
-  labs(y = "Distance to Tumor", fill = "Location") +
+  labs(y = "Distance to\nTumor Surface", fill = "Location") +
   scale_fill_brewer(palette = "Set1")
 
 p2
@@ -91,7 +92,7 @@ tmp = meta %>%
 
 p4 = ggplot() + 
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = Class, fill = Prediction), color = "black") +
-  labs(y = "Class", fill = "Prediction Probability") +
+  labs(y = "", fill = "Prediction Probability") +
   scale_fill_distiller(palette = "Blues", direction = 1) #scale_fill_gradient(low = "#FFFFFF", high = "#084594")
 
 p4
@@ -112,11 +113,11 @@ p5
 tmp = meta %>% 
   select(Sentrix_Accession, Patient, starts_with("Tx2010_proba")) %>%
   gather("Class", "Prediction", -Sentrix_Accession, -Patient) %>%
-  mutate(Class = gsub("\\.", "-", substr(Class, 10, nchar(Class))))
+  mutate(Class = gsub("\\.", "-", substr(Class, 14, nchar(Class))))
 
 p6 = ggplot() + 
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = Class, fill = Prediction), color = "black") +
-  labs(y = "Class", fill = "Prediction Probability") +
+  labs(y = "", fill = "Prediction Probability") +
   scale_fill_distiller(palette = "Blues", direction = 1)
 
 p6
@@ -167,6 +168,9 @@ p7
 
 ##### Plot Gene CNV
 
+genecnv = genecnv %>% filter(gene != "RB1")
+genecnv$pathway = factor(genecnv$pathway, levels = c("Apoptosis", "Cell cycle", "PI3K-RTK-MAPK"), labels = c("Apoptosis", "Cell cycle", "PI3K-\nRTK-MAPK"))
+
 p8 = ggplot() + 
   geom_tile(data = genecnv, aes(x = Sentrix_Accession, y = gene, fill = CNV), color = "black") +
   scale_fill_manual(values = c("-1" = "blue", "0" = NA, "+1" = "red")) +
@@ -184,7 +188,7 @@ g_legend <- function(a.gplot){
   legend
 }
 
-g_theme = theme_minimal(base_size = 9, base_family = "sans") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+g_theme = theme_minimal(base_size = 16, base_family = "sans") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 null_legend = theme(legend.position = 'none')
 null_x = theme(axis.title.x=element_blank(),
                axis.text.x=element_blank(),
@@ -215,14 +219,14 @@ gene_grid = facet_grid(pathway ~ Patient, scales = "free", space = "free")
 
 ## Plots
 g0 = ggplotGrob(p0 + plot_grid + g_theme + null_legend + null_x + top_margin)                  %>% gtable_frame()
-g1 = ggplotGrob(p1 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
-g2 = ggplotGrob(p2 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
+g1 = ggplotGrob(p1 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin + theme(axis.title = element_text(size = 10), axis.text = element_text(size=10)))  %>% gtable_frame()
+g2 = ggplotGrob(p2 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin + theme(axis.title = element_text(size = 10), axis.text = element_text(size=10)))  %>% gtable_frame()
 g3 = ggplotGrob(p3 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g4 = ggplotGrob(p4 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g5 = ggplotGrob(p5 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g6 = ggplotGrob(p6 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
 g7 = ggplotGrob(p7 + plot_grid + g_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
-g8 = ggplotGrob(p8 + gene_grid + g_theme + null_legend + bottom_x + null_facet + bottom_margin)           %>% gtable_frame()
+g8 = ggplotGrob(p8 + gene_grid + g_theme + null_legend + bottom_x + null_facet + bottom_margin + theme(strip.text.y = element_text(size = 12)))      %>% gtable_frame()
 
 g = gtable_rbind(g0, g1, g2, g3, g4, g5, g6, g7, g8)
 gleg = gtable_rbind(gleg0, gleg2, gleg3, gleg4, gleg5, gleg6, gleg7, gleg8)
@@ -231,12 +235,12 @@ gleg = gtable_rbind(gleg0, gleg2, gleg3, gleg4, gleg5, gleg6, gleg7, gleg8)
 panels = g$layout$t[grep("panel", g$layout$name)]
 g$heights[panels] <- unit(c(0.8,1.5,1.5,0.5,4,0.5,1.5,2,6), "null")
 
-pdf(file = "figures/HM_v6_Verhaak2010.pdf", width = 10, height = 12)
+pdf(file = "figures/HM_v7_Verhaak2010.pdf", width = 8.5, height = 11)
 grid.newpage()
 grid.draw(g)
 dev.off()
 
-pdf(file = "figures/legend_v6.pdf", width = 4, height = 12)
+pdf(file = "figures/legend_v7.pdf", width = 4, height = 11)
 grid.newpage()
 grid.draw(gleg)
 dev.off()
