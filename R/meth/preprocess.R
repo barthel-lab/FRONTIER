@@ -3,8 +3,8 @@
 ## Script purpose: 
 ## Provides the initial pipeline starting with idat files from VUmc, Toronto and UCSF datasets + Controls
 ## Idat files are processed into MethArray objects and beta and M values
-## Date: June 14, 2018
-## Author: Floris Barthel
+## Date: August 15, 2018
+## Author: Floris Barthel, Niels Verburg
 ##################################################
 
 basedir = here::here()
@@ -44,14 +44,14 @@ setwd(basedir)
 
 targ = read.csv(sheet_file, as.is=T)
 
-il450k_targ = targ %>% filter(Array == "IlluminaHumanMethylation450k")
+il450k_targ = targ %>% filter(Array == "IlluminaHumanMethylation450k") %>% as.data.frame()
 il450k_data = read.metharray.exp(targets = il450k_targ, verbose = T)
 
-ilEPIC_targ = targ %>% filter(Array == "IlluminaHumanMethylationEPIC")
+ilEPIC_targ = targ %>% filter(Array == "IlluminaHumanMethylationEPIC") %>% as.data.frame()
 ilEPIC_data = read.metharray.exp(targets = ilEPIC_targ, verbose = T, force = T)
 
 il450k_r = preprocessRaw(il450k_data)
-ilEPIC_r = preprocessRaw(ilEPIC_data)
+ilEPIC_r = preprocessRaw(ilEPIC_datse)
 
 save(il450k_data, ilEPIC_data, file = raw_output_rda)
 
@@ -111,32 +111,36 @@ ilEPIC_g_filt = dropLociWithSnps(ilEPIC_g_filt)
 
 ## make vector with type probe for analysis
 probeTypes_450 = getProbeType(il450k_g_filt, withColor=FALSE)
-probeTypes_450 = ifelse(grepl("II",probeTypes), 2, 1)
+probeTypes_450 = ifelse(grepl("II",probeTypes_450), 2, 1)
 probeTypes_EPIC = getProbeType(ilEPIC_g_filt, withColor=FALSE)
-probeTypes_EPIC = ifelse(grepl("II",probeTypes), 2, 1)
+probeTypes_EPIC = ifelse(grepl("II",probeTypes_EPIC), 2, 1)
 ## BMIQ analyse, returns list among which a normalized Beta value matrix
 nBeta_450 = BMIQ(getBeta(il450k_g_filt), probeTypes_450, nfit=10000)
 nBeta_EPIC = BMIQ(getBeta(ilEPIC_g_filt), probeTypes_EPIC, nfit=10000)
 ## calculate new M values out of Beta values 
-nM_450 <- apply(nBeta_450$nbeta,1:2, beta2m)
-nM_EPIC <- apply(nBeta_EPIC$nbeta,1:2, beta2m)
-## create gRatioSets from adjusted B and M values
-il450k_g_filt.B = makeGenomicRatioSetFromMatrix(nBeta_450$nbeta,  rownames = NULL, pData = pData(il450k_g_filt),
+# nM_450 <- apply(nBeta_450$nbeta,1:2, beta2m)
+# nM_EPIC <- apply(nBeta_EPIC$nbeta,1:2, beta2m)
+# ## create gRatioSets from adjusted B and M values
+
+il450k_g_filt_bmiq = makeGenomicRatioSetFromMatrix(nBeta_450$nbeta,  rownames = NULL, pData = pData(il450k_g_filt),
                                              array = "IlluminaHumanMethylation450k",
-                                             annotation = "ilm10b2.hg19",
+                                             annotation = "ilmn12.hg19",
                                              mergeManifest = FALSE, what = "B")
-il450k_g_filt.M = makeGenomicRatioSetFromMatrix(nM_450,  rownames = NULL, pData = pData(il450k_g_filt),
-                                             array = "IlluminaHumanMethylation450k",
-                                             annotation = "ilm10b2.hg19",
-                                             mergeManifest = FALSE, what = "M")
-ilEPIC_g_filt.B = makeGenomicRatioSetFromMatrix(nBeta_EPIC$nbeta,  rownames = NULL, pData = pData(ilEPIC_g_filt),
+
+# il450k_g_filt.M = makeGenomicRatioSetFromMatrix(nM_450,  rownames = NULL, pData = pData(il450k_g_filt),
+#                                              array = "IlluminaHumanMethylation450k",
+#                                              annotation = "ilm10b2.hg19",
+#                                              mergeManifest = FALSE, what = "M")
+
+ilEPIC_g_filt_bmiq = makeGenomicRatioSetFromMatrix(nBeta_EPIC$nbeta,  rownames = NULL, pData = pData(ilEPIC_g_filt),
                                              array = "IlluminaHumanMethylationEPIC",
                                              annotation = "ilm10b2.hg19",
                                              mergeManifest = FALSE, what = "B")
-ilEPIC_g_filt.M = makeGenomicRatioSetFromMatrix(nM_EPIC,  rownames = NULL, pData = pData(ilEPIC_g_filt),
-                                             array = "IlluminaHumanMethylationEPIC",
-                                             annotation = "ilm10b2.hg19",
-                                             mergeManifest = FALSE, what = "M")
+
+# ilEPIC_g_filt.M = makeGenomicRatioSetFromMatrix(nM_EPIC,  rownames = NULL, pData = pData(ilEPIC_g_filt),
+#                                              array = "IlluminaHumanMethylationEPIC",
+#                                              annotation = "ilm10b2.hg19",
+#                                              mergeManifest = FALSE, what = "M")
 
 ## Save
 #save(il450k_targ, ilEPIC_targ, il450k_g_filt, ilEPIC_g_filt, ilEPIC_g_filt.M, ilEPIC_g_filt.B, il450k_g_filt.B, il450k_g_filt.M file = filt_output_rda)
@@ -145,7 +149,7 @@ ilEPIC_g_filt.M = makeGenomicRatioSetFromMatrix(nM_EPIC,  rownames = NULL, pData
 # 6. Combine
 ###
 
-all_data = combineArrays(il450k_g_filt, ilEPIC_g_filt, outType = "IlluminaHumanMethylation450k")
+all_data = combineArrays(il450k_g_filt_bmiq, ilEPIC_g_filt_bmiq, outType = "IlluminaHumanMethylation450k")
 all_targ = list(il450k_targ, ilEPIC_targ) %>% purrr::reduce(full_join) %>% filter(basename(Basename) %in% colnames(all_data))
 
 save(all_data, file = final_output_rda)

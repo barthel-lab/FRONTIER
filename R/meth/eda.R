@@ -14,7 +14,7 @@ library(GGally)
 out_pdf_comparison = "figures/PCA.pdf"
 
 setwd(here::here())
-load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
+load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 
 #####
 ## PCA of all samples
@@ -26,12 +26,18 @@ all_probes = order(-apply(getM(all_data), 1, var))[1:5000]
 all_dat = t(getM(all_data)[all_probes,])
 ## perform pca
 all_pca = prcomp(all_dat)
+## perform k-means
+k2 = kmeans(all_dat, 2)
+k3 = kmeans(all_dat, 3)
 ## merge metadata and results
 all_meta = data.frame(all_pca$x[,1:6]) %>% #(x = all_mds$x, y = all_mds$y) %>% 
   rownames_to_column("Sentrix_Accession") %>% 
   left_join(as.data.frame(pData(all_data))) %>%
   mutate(PC1var = round(((all_pca$sdev^2)[1]/sum(all_pca$sdev^2)) * 100, 1),
-         PC2var = round(((all_pca$sdev^2)[2]/sum(all_pca$sdev^2)) * 100, 1))
+         PC2var = round(((all_pca$sdev^2)[2]/sum(all_pca$sdev^2)) * 100, 1),
+         k2 = factor(unname(k2$cluster)),
+         k3 = factor(unname(k3$cluster)))
+
 
 #####
 ## sub-clustering - IDH wt
@@ -72,7 +78,7 @@ mt_meta = data.frame(mt_pca$x[,1:6]) %>%
 
 ############
 
-pdf(file = "figures/PCA.pdf", width=12, height=10)
+pdf(file = "figures/PCA_v2.pdf", width=12, height=10)
 
 ## PCA - all samples, limited variables
 ggplot(all_meta, aes(x = PC1, y = PC2, shape = Dataset, color = Sample_Type)) + geom_point() + 
