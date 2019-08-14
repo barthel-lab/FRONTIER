@@ -2,12 +2,10 @@
 .Rproj.user/**
 data/**
 manuscript/**
-!data/ref
-!data/meta
 sandbox/**
 documents/**
 results/**
-!results/qc
+figures/**
 *.Rdata
 *.RData
 *.Rda

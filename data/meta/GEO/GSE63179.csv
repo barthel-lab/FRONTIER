@@ -1,5 +1,0 @@
-Basename,Dataset,Source,Sample_Name,Sample_ID,Sentrix_ID,Sentrix_Position,Disease,Tissue,Age,Gender
-/projects/barthf/MSG/data/idat/GSE63179/GSM1543269_9373551079_R01C01,Controls,GSE63179,brain-BS,GSM1543269,9373551079,R01C01,post-mortem,cerebellum,25,M
-/projects/barthf/MSG/data/idat/GSE63179/GSM1543271_9373551079_R02C01,Controls,GSE63179,brain-BS,GSM1543271,9373551079,R02C01,post-mortem,cerebellum,25,M
-/projects/barthf/MSG/data/idat/GSE63179/GSM1543273_9373551079_R03C01,Controls,GSE63179,brain-BS,GSM1543273,9373551079,R03C01,post-mortem,cerebellum,25,M
-/projects/barthf/MSG/data/idat/GSE63179/GSM1543274_9373551079_R04C01,Controls,GSE63179,brain-BS,GSM1543274,9373551079,R04C01,post-mortem,cerebellum,25,M
