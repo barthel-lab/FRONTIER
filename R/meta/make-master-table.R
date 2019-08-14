@@ -18,35 +18,34 @@ txpred2   = read.csv('results/transcriptome/FRONTIER.PredictVerhaak2010.csv', as
 cellpred  = read.csv('results/meth/FRONTIER.PredictCell2016.csv', as.is = T)
 idhpred   = read.csv('results/meth/FRONTIER.PredictIDH.csv', as.is = T) %>% dplyr::rename(IDH_Predict = Cell_Predict)
 tvsnpred  = read.csv('results/meth/FRONTIER.PredictTvsN.csv', as.is = T) %>% dplyr::rename(TvsN_Predict = Cell_Predict)
-pur       = read.csv('results/purity/FRONTIER.PAMES.purity_cortex_450k_TCGA_v2.csv', as.is = T)
-dist      = read.csv('results/imaging/Patient_Location_Stats.csv', as.is = T)
-hb        = read.delim('results/hb/MSG.HB_classification.tsv', as.is = T)
+pur       = read.csv('results/purity/FRONTIER.PAMES.purity_cortex_450k_TCGA_v3.csv', as.is = T)
+simp      = read.csv('results/simplicity/FRONTIER.simplicity.csv', as.is = T)
+img1 <- read.csv('results/imaging/FRONTIER.imaging-K2.081419.csv', as.is = T)
+img2 <- read.csv('results/imaging/FRONTIER.imaging-NCH.20190808.csv', as.is = T)
+hist <- read.csv('results/histology/FRONTIER.histology.20190724.csv', as.is = T)
+path <- read.csv('results/histology/FRONTIER.pathology.20190808.csv', as.is = T)
+
 
 ## Rename Tx classifier fields
 txpred2 = txpred2 %>% rename_all(funs(gsub("Tx", "Tx2010", .)))
 txpred = txpred %>% rename_all(funs(gsub("Tx", "Tx2017", .)))
 
-meta = pData(all_data) %>% 
-  as.data.frame() %>% 
-  left_join(hb) %>%
-  left_join(cellpred) %>%
-  left_join(txpred) %>%
-  left_join(txpred2) %>%
-  left_join(idhpred) %>%
-  left_join(tvsnpred) %>%
-  left_join(pur) %>%
-  left_join(dist) %>%
+meta = pData(all_data) %>%
+  as.data.frame() %>% #left_join(hb) %>%
+  left_join(cellpred, by = "Sentrix_Accession") %>%
+  left_join(txpred, by = "Sentrix_Accession") %>%
+  left_join(txpred2, by = "Sentrix_Accession") %>%
+  left_join(idhpred, by = "Sentrix_Accession") %>%
+  left_join(tvsnpred, by = "Sentrix_Accession") %>%
+  left_join(pur, by = "Sentrix_Accession") %>%
+  left_join(simp, by = "Sentrix_Accession") %>%
+  left_join(img1, by = "Sentrix_Accession") %>%
+  left_join(img2, by = "Sentrix_Accession") %>%
+  left_join(hist, by = "Sentrix_Accession") %>%
+  left_join(path, by = "Sentrix_Accession") %>%
   group_by(Patient) %>%
-  mutate(n_patient = sum(Dataset != 'DKFZ' & !grepl("^Rec", Sample_Type)), 
-         n_pur = sum(purity > 0.5 & Dataset != 'DKFZ' & !grepl("^Rec", Sample_Type)),
-         IDH = NA) %>%
-  ungroup() %>% # filter(n_patient > 1, n_pur > 0) %>% ## Drop patients w/ only a single sample & patients w/ only low purity samples
-  mutate(Sample_Type2 = recode(Sample_Type, 'Recurrence' = 'Biopsy', 'Recurrence2' = 'Biopsy', 'Recurrence3' = 'Biopsy', 'Initial' = 'Biopsy'),
-         purity_cat = cut(purity, breaks = c(0, 0.45, 0.59, 0.69, 1), labels = c("< 0.45", "0.45 - 0.59", "0.59 - 0.69", "> 0.69"), dig.lab = 2, include.lowest = T),
-         dist_cat = cut(Dist_to_tumor_surface, breaks = c(-Inf, 0, 5, 10, Inf), labels = c("Inside (< 0)", "Inner Rim (0-5)", "Outer Rim (5-10)", "Distal (> 10)"), dig.lab = 2, include.lowest = T),
-         Dataset2 = ifelse(Dataset == "DKFZ", "DKFZ", "VUmc|UCSF|Toronto"),
-         Cell_Predict2 = factor(ifelse(is.na(Cell_Predict), Sample_Type, Cell_Predict), levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-low", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Granulation", "Cortex")))) %>%
-  DataFrame()
+  mutate(filter = sum(Dataset != 'DKFZ' & !grepl("^Rec", Sample_Type)) <= 1 | Dataset == 'DKFZ' | grepl("^Rec", Sample_Type)) %>%
+  ungroup()
 
 ## Filter all-data
 # all_data = all_data[, meta$Sentrix_Accession]

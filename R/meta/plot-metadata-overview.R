@@ -18,24 +18,61 @@ library(RColorBrewer)
 ##################################################
 
 ## import meta
-load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
+#load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 
+##################################################
+## Initialize dataset
 ##################################################
 
 ## Sort by purity
-
 meta = pData(all_data) %>% as.data.frame() %>%
-  filter(Dataset != "DKFZ", n_patient > 1, !grepl("^Rec", Sample_Type)) %>%
+  filter(!filter) %>%
   arrange(purity) %>% 
-  mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = unique(Sentrix_Accession))) %>%
-  mutate(Dist_to_tumor_surface = ifelse(is.na(Dist_to_tumor_surface), 0, Dist_to_tumor_surface)) %>%
+  mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = unique(Sentrix_Accession))) %>% #mutate(Dist_to_tumor_surface = ifelse(is.na(Dist_to_tumor_surface), 0, Dist_to_tumor_surface)) %>%
   mutate(Patient = gsub("\\-", "\n", Patient)) %>%
   mutate(Cell_Predict = factor(Cell_Predict, levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Cortex")))) %>%
-  filter(Batch == 1, Dataset == "VUmc")
+  filter(Dataset == "VUmc") #Batch == 1, 
 
 sample_order = levels(meta$Sentrix_Accession)
 
+##################################################
+
+## Extract legend
+g_legend <- function(a.gplot){
+  tmp <- ggplot_gtable(ggplot_build(a.gplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  legend
+}
+
+plot_theme = theme_minimal(base_size = 16, base_family = "sans") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+null_legend = theme(legend.position = 'none')
+null_x = theme(axis.title.x=element_blank(),
+               axis.text.x=element_blank(),
+               axis.ticks.x=element_blank()) 
+bottom_x = theme(axis.text.x=element_blank()) 
+null_facet = theme(strip.background = element_blank(),
+                   strip.text.x = element_blank())
+top_margin = theme(plot.margin= unit(c(1, 1, 0.1, 1), "lines")) ## Top, Right, Bottom, Left
+middle_margin = theme(plot.margin= unit(c(0, 1, 0.1, 1), "lines"))
+bottom_margin = theme(plot.margin= unit(c(0, 1, 1, 1), "lines"))
+plot_grid = facet_grid(. ~ Patient, scales = "free_x", space = "free")
+gene_grid = facet_grid(pathway ~ Patient, scales = "free", space = "free")
+
+##################################################
+## TEST PLOT FUNCTION
+##################################################
+
+testPlot <- function(gg, grid = TRUE) {
+  if(grid)
+    gg + plot_theme + plot_grid + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  else
+    gg + plot_theme + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+}
+
+##################################################
 ## Plot histology/grade
+
 tmp = meta %>% 
   select(Sentrix_Accession, Patient, Histology, Grade) %>%
   gather(key = "variable", value="value", Histology, Grade) %>%
@@ -46,27 +83,52 @@ p0 = ggplot() +
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = variable, fill = value), color = "black") +
   labs(y = "", fill = "Grade/Histology") 
 
-p0
+testPlot(p0)
 
 ## Plot purity
 
-p1 = ggplot() + 
-  geom_bar(data = meta, aes(x=Sentrix_Accession, y=purity), fill = "#999999", color = "black", size = 0.25, stat = "identity") +
+p1 = ggplot() +
+  geom_line(data = meta, aes(x=Sentrix_Accession, y=purity, group = Patient), color = "#999999") +
+  geom_point(data = meta, aes(x=Sentrix_Accession, y=purity), color = "black") +
   labs(y = "Purity", fill = "Purity group") +
   geom_hline(yintercept=0.5, linetype = 2) 
 
-p1
+testPlot(p1)
 
 ##################################################
-
 ## Plot distance
 
-p2 = ggplot() + 
-  geom_bar(data = meta, aes(x=Sentrix_Accession, y=Dist_to_tumor_surface, fill = Location), color = "black", size = 0.25, stat = "identity") +
+tmp <- meta %>% select(Sentrix_Accession, Patient, Dist_to_CE_surface, Dist_to_nCE_surface) %>%
+  gather(key = "m", value = "distance", -Sentrix_Accession, -Patient)
+
+p2 = ggplot(tmp) + 
+  geom_point(aes(x = Sentrix_Accession, y = distance, color = m)) +
+  geom_line(aes(x = Sentrix_Accession, y = distance, color = m, group = m)) + # color = "black", size = 0.25, 
+  geom_hline(yintercept = 0, linetype = 2) +
   labs(y = "Distance to\nTumor Surface", fill = "Location") +
   scale_fill_brewer(palette = "Set1")
 
-p2
+testPlot(p2)
+
+##################################################
+## Plot histology
+
+tmp <- meta %>% select(Sentrix_Accession, Patient, Dist_to_CE_surface, Dist_to_nCE_surface) %>%
+  gather(key = "m", value = "distance", -Sentrix_Accession, -Patient)
+
+p3 = ggplot(meta) + 
+  geom_bar(aes(x = Sentrix_Accession, y = Cellularity_median), fill = "pink", size = 0.25, color = "black", stat = "identity") +
+  labs(y = "Cellularity\ncells/mm2")# +
+  #coord_cartesian(ylim = c(10e1, 10e4))
+
+testPlot(p3)
+
+p4 = ggplot(meta) + 
+  geom_bar(aes(x = Sentrix_Accession, y = ProliferationIndex_median), fill = "#800080", size = 0.25, color = "black", stat = "identity") +
+  labs(y = "%-MIB1\npositive cells") +
+  coord_cartesian(ylim = c(0, 100))
+
+testPlot(p4)
 
 ##################################################
 
@@ -179,28 +241,6 @@ p8 = ggplot() +
 p8
 
 #### Combine plots
-
-## Extract legend
-g_legend <- function(a.gplot){
-  tmp <- ggplot_gtable(ggplot_build(a.gplot))
-  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
-  legend <- tmp$grobs[[leg]]
-  legend
-}
-
-g_theme = theme_minimal(base_size = 16, base_family = "sans") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
-null_legend = theme(legend.position = 'none')
-null_x = theme(axis.title.x=element_blank(),
-               axis.text.x=element_blank(),
-               axis.ticks.x=element_blank()) 
-bottom_x = theme(axis.text.x=element_blank()) 
-null_facet = theme(strip.background = element_blank(),
-                   strip.text.x = element_blank())
-top_margin = theme(plot.margin= unit(c(1, 1, 0.1, 1), "lines")) ## Top, Right, Bottom, Left
-middle_margin = theme(plot.margin= unit(c(0, 1, 0.1, 1), "lines"))
-bottom_margin = theme(plot.margin= unit(c(0, 1, 1, 1), "lines"))
-plot_grid = facet_grid(. ~ Patient, scales = "free_x", space = "free")
-gene_grid = facet_grid(pathway ~ Patient, scales = "free", space = "free")
 
 # ## Legends
 gleg0 = g_legend(p0)
