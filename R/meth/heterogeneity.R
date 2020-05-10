@@ -18,6 +18,7 @@ load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 ## Apply over matrix faster using vapply vs apply
 ## https://stackoverflow.com/questions/8579257/r-applying-function-over-matrix-and-keeping-matrix-dimensions
 
+b <- getBeta(all_data)
 binarized <- getBeta(all_data)
 binarized[] <- vapply(binarized, function(x) ifelse(x>0.3,1,0), numeric(1))
 
@@ -26,7 +27,7 @@ meta <- pData(all_data) %>%
   as.data.frame() %>%
   filter(!filter) %>% ## only keep multisector samples
   mutate(Cell_Predict2 = factor(ifelse(is.na(Cell_Predict), Sample_Type, Cell_Predict), levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-low", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Granulation", "Cortex")))) %>%
-  select(Sentrix_Accession, Dataset, Subtype = Cell_Predict2, Patient, IDH = IDH_Predict, TumorNormal = TvsN_Predict, Location, PAMES = purity) %>%
+  select(Sentrix_Accession, Dataset, Subtype = Cell_Predict2, Patient, IDH = IDH_Predict, TumorNormal = TvsN_Predict, Location, PAMES = purity, X, Y, Z) %>%
   mutate(Class = case_when(Subtype == "Cortex" ~ "Normal",
                            Subtype == "Inflammatory-TME" ~ "Normal",
                            Subtype == "Reactive-TME" ~ "Normal",
@@ -52,8 +53,10 @@ homogen_res <- mclapply(1:nrow(homogen_pat), function(i) {
   
   tmp <- filter(meta, Patient == ptn, Class == cls)
   
-  ## vector w all possible samples
+  ## vector w all possible samples v
   v <- tmp$Sentrix_Accession
+  
+  ## number of samples n
   n <- length(v)
   
   ## 
@@ -118,6 +121,24 @@ gg <- ggplot(homogen_res, aes(x=N, y = Mean*100, color = Dataset, group = paste(
 pdf(file = "figures/Fig 4/Fig4e.pdf", width = 10, height = 4, useDingbats = FALSE)
 plot(gg)
 dev.off()
+
+### COMPUTE CHANGE BY ADDING SAMPLE
+homogen_res_diff <- homogen_res %>% 
+  group_by(Patient,Class,Dataset) %>% 
+  arrange(N) %>% 
+  transmute(N=seq(1:n()), diff = c(0,diff(1-Mean))) %>% 
+  ungroup()
+
+gg <- ggplot(homogen_res_diff, aes(x=N, y = diff, color = Dataset, group = paste(Patient,Class), linetype = Class)) + 
+  geom_point() +
+  geom_line() +
+  #geom_linerange(aes(ymin = Mean*100 - Sd*100, ymax = Mean*100 + Sd*100), alpha = 0.4) +
+  #geom_errorbar(aes(ymin = Mean*100 - Sd*100, ymax = Mean*100 + Sd*100), width = 0.25, alpha = 0.4) +
+  scale_x_continuous(breaks = 1:9) + 
+  coord_cartesian(ylim = c(0,0.06)) +
+  theme_minimal(base_size = 10) +
+  #labs(x = "Number of Samples", y = "%-homogeneity (mean +- sd)") +
+  facet_wrap(~Class, scales = "free_x")
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
 ## Compute all pairwise combinations of samples
@@ -197,11 +218,12 @@ pcounts2 <- combp_anno %>%
 
 combacc <- combacc %>% 
   left_join(meta, by = c("Sentrix_Accession_A" = "Sentrix_Accession")) %>%
-  dplyr::rename(Dataset_A = Dataset, Subtype_A = Subtype, Patient_A = Patient, IDH_A = IDH, TumorNormal_A = TumorNormal, Location_A = Location) %>%
+  dplyr::rename(Dataset_A = Dataset, Subtype_A = Subtype, Patient_A = Patient, IDH_A = IDH, TumorNormal_A = TumorNormal, Location_A = Location, Xa = X, Ya = Y, Za = Z) %>%
   left_join(meta, by = c("Sentrix_Accession_B" = "Sentrix_Accession")) %>%
-  dplyr::rename(Dataset_B = Dataset, Subtype_B = Subtype, Patient_B = Patient, IDH_B = IDH, TumorNormal_B = TumorNormal, Location_B = Location) %>%
+  dplyr::rename(Dataset_B = Dataset, Subtype_B = Subtype, Patient_B = Patient, IDH_B = IDH, TumorNormal_B = TumorNormal, Location_B = Location, Xb = X, Yb = Y, Zb = Z) %>%
   filter(complete.cases(Dataset_A, Dataset_B)) %>%
-  mutate(prop_homogeneous = n_homogeneous / (n_homogeneous + n_heterogeneous),
+  mutate(cart_dist = sqrt((Xb - Xa)^2 + (Yb - Ya)^2 + (Zb - Za)^2),
+         prop_homogeneous = n_homogeneous / (n_homogeneous + n_heterogeneous),
          prop_heterogeneous = n_heterogeneous / (n_homogeneous + n_heterogeneous),
          class_a = case_when(Subtype_A == "Cortex" ~ "Normal",
                              Subtype_A == "Inflammatory-TME" ~ "Normal",
@@ -424,6 +446,24 @@ for(i in 1:nrow(comb_class)) {
 ggplot(comb_class, aes(x = class_a, y = class_b, fill = ifelse(-log10(p.value) == Inf, 10, -log10(p.value)))) + 
   geom_tile() +
   facet_grid(patient_a ~ patient_b)
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+## Plot cartesian distances between two points within a patient
+## Correlate to heterogeneity
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+
+tmp <- combacc %>% filter(Patient_level == "Intra-patient", Dataset_A == "VUmc", Sentrix_Accession_A != Sentrix_Accession_B)
+
+ggplot(tmp, aes(x = cart_dist, y=prop_heterogeneous, color = Class.x)) + geom_point() + geom_smooth(method = "lm") + theme_bw() +
+  labs(x = "Cartesian plane distace", y = "Proportion of probes heterogeneous", color = "Set")
+
+nrow(subset(tmp, tmp$Class.x == "Tumor-IDHwt"))
+nrow(subset(tmp, tmp$Class.x == "Tumor-IDHmut"))
+nrow(subset(tmp, tmp$Class.x == "Normal"))
+
+with(subset(tmp, tmp$Class.x == "Tumor-IDHwt"), cor.test(cart_dist, prop_heterogeneous))
+with(subset(tmp, tmp$Class.x == "Tumor-IDHmut"), cor.test(cart_dist, prop_heterogeneous))
+with(subset(tmp, tmp$Class.x == "Normal"), cor.test(cart_dist, prop_heterogeneous))
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
 ## Need a function to compute all possible combinations

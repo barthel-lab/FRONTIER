@@ -33,11 +33,75 @@ k3 = kmeans(all_dat, 3)
 all_meta = data.frame(all_pca$x[,1:6]) %>% #(x = all_mds$x, y = all_mds$y) %>% 
   rownames_to_column("Sentrix_Accession") %>% 
   left_join(as.data.frame(pData(all_data))) %>%
+  mutate(Patient = gsub("Vumc","VUmc", Patient)) %>%
   mutate(PC1var = round(((all_pca$sdev^2)[1]/sum(all_pca$sdev^2)) * 100, 1),
          PC2var = round(((all_pca$sdev^2)[2]/sum(all_pca$sdev^2)) * 100, 1),
          k2 = factor(unname(k2$cluster)),
-         k3 = factor(unname(k3$cluster)))
+         k3 = factor(unname(k3$cluster)),
+         ds = case_when(Dataset %in% c("UCSF", "Toronto") & Cell_Predict %in% c("Codel","G-CIMP-high","G-CIMP-low") ~ "Validation (IDHmut)",
+                        Dataset %in% c("UCSF", "Toronto") & Cell_Predict %in% c("Classic-like","Mesenchymal-like") ~ "Validation (IDHwt)",
+                        Dataset == "DKFZ" & Sample_Type == "Cortex" ~ "Control (cortex)",
+                        Dataset == "DKFZ" & Sample_Type == "Granulation" ~ "Control (granulation)",
+                        Dataset == "DKFZ" & Sample_Type == "Inflammatory-TME" ~ "Control (inflammatory)",
+                        Dataset == "DKFZ" & Sample_Type == "Reactive-TME" ~ "Control (reactive)",
+                        TRUE ~ NA_character_),
+         vp = case_when(Dataset == "VUmc" ~ Patient,
+                        TRUE ~ NA_character_),
+         idh = case_when(Patient %in% sprintf("VUmc-%s", c("03","05","06","09","10","12","15","01","04")) ~ "yes",
+                         Patient %in% sprintf("VUmc-%s", c("02","07","08","11","13","14","17")) ~ "no",
+                         TRUE ~ NA_character_),
+         Subtype = factor(ifelse(is.na(Cell_Predict), Sample_Type, Cell_Predict), levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-low", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Granulation", "Cortex"))),
+         purity_cat = cut(purity, breaks = c(0, 0.45, 0.59, 0.69, 1), labels = c("< 0.45", "0.45 - 0.59", "0.59 - 0.69", "> 0.69"), dig.lab = 2, include.lowest = T))
 
+# na color
+# "#a6cee3"
+
+pt_colrs = c("#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a", 
+             "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00")
+names(pt_colrs) = c(sprintf("VUmc-%s", c("03","05","06","09","10","12","15","01","04")),
+                    sprintf("VUmc-%s", c("02","07","08","11","13","14","17")))
+
+ds_colrs = c("#7fc97f", "#beaed4", "#fdc086", "#ffff99", "#386cb0", "#f0027f")
+names(ds_colrs) = c("Control (cortex)", "Control (granulation)", "Control (inflammatory)", "Control (reactive)", "Validation (IDHmut)", "Validation (IDHwt)")
+
+############
+## Plot PCA for figure
+## PCA1 = by dataset
+## PCA2 = by subtype
+## PCA3 = by patient
+############
+
+pdf(file = "figures/PCA_ds.pdf", width=4, height=3, useDingbats = FALSE)
+
+ggplot(all_meta, aes(x = PC1, y = PC2, color = ds, size = purity_cat)) + geom_point() +
+  labs(x = sprintf("PC1 (%s%%)", all_meta$PC1var), y = sprintf("PC2 (%s%%)", all_meta$PC2var), size = "Purity", color = "Dataset") +
+  theme_minimal(base_size = 7, base_family = "Times") +
+  scale_size_manual(values = c(0.6,1.0,1.4,1.8), na.value = 0.6) +
+  scale_color_manual(values = ds_colrs, na.value = "gray") +
+  theme(legend.key.size = unit(0.5, 'lines'))
+
+dev.off()
+
+pdf(file = "figures/PCA_st.pdf", width=4, height=3, useDingbats = FALSE)
+
+ggplot(all_meta, aes(x = PC1, y = PC2, color = Subtype)) + geom_point() +
+  labs(x = sprintf("PC1 (%s%%)", all_meta$PC1var), y = sprintf("PC2 (%s%%)", all_meta$PC2var), size = "Purity", color = "Subtype") +
+  theme_minimal(base_size = 7, base_family = "Times") +
+  theme(legend.key.size = unit(0.5, 'lines'))
+
+dev.off()
+
+pdf(file = "figures/PCA_pt.pdf", width=4, height=3, useDingbats = FALSE)
+
+ggplot(all_meta, aes(x = PC1, y = PC2, color = vp, shape = idh)) + geom_point() + 
+  labs(x = sprintf("PC1 (%s%%)", all_meta$PC1var), y = sprintf("PC2 (%s%%)", all_meta$PC2var), color = "Patient ID") +
+  theme_minimal(base_size = 7, base_family = "Times") + 
+  scale_color_manual(values = pt_colrs, na.value = "#a6cee3") + 
+  scale_shape_manual(values = c("yes" = 1, "no" = 16), na.value = 3) +
+  guides(shape = FALSE) +
+  theme(legend.key.size = unit(0.5, 'lines'))
+  
+dev.off()
 
 #####
 ## sub-clustering - IDH wt
@@ -75,8 +139,6 @@ mt_meta = data.frame(mt_pca$x[,1:6]) %>%
   mutate(PC1var = round(((mt_pca$sdev^2)[1]/sum(mt_pca$sdev^2)) * 100, 1),
          PC2var = round(((mt_pca$sdev^2)[2]/sum(mt_pca$sdev^2)) * 100, 1))
 
-
-############
 
 pdf(file = "figures/PCA_v2.pdf", width=12, height=10)
 
