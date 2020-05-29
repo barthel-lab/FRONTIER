@@ -6,6 +6,7 @@ sandbox/**
 documents/**
 results/**
 figures/**
+R/sandbox/**
 *.Rdata
 *.RData
 *.Rda
