@@ -2,7 +2,7 @@
 ## Project: FRONTIER
 ## Script purpose: Initiate data for heterogeneity analyses
 ## Created: Aug 7, 2019
-## Updated: May 29, 2020
+## Updated: June 12, 2020
 ## Author: Floris Barthel
 ##################################################
 
@@ -97,7 +97,7 @@ hyper_hypo_probes_dkfz_cortex = apply(binarized_dkfz_cortex, 1, function(x) all(
 meta <- meta %>% arrange(PAMES) %>% group_by(Patient) %>% mutate(PatientN = 1:n()) %>% ungroup()
 patientnmap <- meta %>% arrange(Patient) %>% select(Sentrix_Accession, Dataset, Patient, Sample_Name, Biopsy, PatientN, Subtype, Patient_Class)
 
-#write.csv(patientnmap, file = "FRONTIER.patient_samples.csv")
+#write.csv(patientnmap, file = "sandbox/FRONTIER.patient_samples.csv")
 
 ## Recode probemap according to actual probe matrix, ensuring probes are in order
 probemap <- probemap[match(rownames(b), probemap$probe),] %>%

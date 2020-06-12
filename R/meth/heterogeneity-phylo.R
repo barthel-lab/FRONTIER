@@ -2,113 +2,27 @@
 ## Project: FRONTIER
 ## Script purpose: Draw phylo trees
 ## Created: Aug 7, 2019
-## Updated: May 29, 2020
+## Updated: June 12, 2020
 ## Author: Floris Barthel
 ##################################################
 
 source("R/meth/heterogeneity-init.R")
+source("R/meth/heterogeneity-func.R")
 
 library(apTreeshape)
 library(geiger)
-
-simplMatrix <- function(m, binary = TRUE, purity = 1) {
-  p <- probemap[match(colnames(m), probemap$probe),]
-  
-  ## Iterate over chromosomes
-  arr_by_chrom <- mclapply(unique(p$chrom), function(chrom) {
-    ## Subset matrix using chromosome-specific probes
-    mc <- m[,p$probe[p$chrom==chrom]]
-    pc <- p[p$chrom==chrom,]
-    
-    m0 <- mc[,1:ncol(mc)-1]
-    m1 <- mc[,2:ncol(mc)]
-    
-    ## Compute incremental differences across matrix
-    adm <- abs(m1-m0) > 0.3
-    
-    ## Set CpGs that are >10kb seperated from adjacent CpG to TRUE so they will be seperated from their neighbors
-    adm[,pc$pos_diff[2:nrow(pc)] > 10000] <- TRUE
-    
-    ## Identify columns where there is a switch in beta value > 0.3
-    beta_change_col_idx <- unique(which(adm == TRUE, arr.ind = TRUE)[,2])
-    
-    ## Add final CpG in subset if not identified as different from previous
-    if(max(beta_change_col_idx) < ncol(mc))
-      beta_change_col_idx <- c(beta_change_col_idx, ncol(mc))
-    
-    msimp <- sapply(1:length(beta_change_col_idx), function(i) {
-      j <- 1
-      if(i>1)
-        j <- beta_change_col_idx[i-1] + 1
-      k <- beta_change_col_idx[i]
-      
-      ms <- apply(mc[,j:k, drop = FALSE],1,mean)
-      
-      #root_beta <- ifelse(ms[nrow(mc)]>0.3, 1, 0)
-      
-      ## If the tumor root (normal) is unmethylated
-      ## In a low purity sample we should adjust the threshold downwards
-      ## Eg. in 0.5 purity sample a beta value of 0.2 could still indicate methylation
-      #if(root_beta == 0)
-      #  return(ifelse(ms>(0.3*(purity)),1,0))
-      
-      ## If the tumor root (normal) is methylated
-      ## In a low purity sample we should adjust the threshold upwards
-      ## Eg. in 0.5 purity sample a beta value of 0.6 could still indicate an unmethylated probe
-      #if(root_beta == 1)
-      #  return(ifelse(ms>(0.3*(1/purity/2)),1,0))
-      return(ifelse(ms>0.3,1,0))
-      #return(ifelse(ms>0.6,1,ifelse(ms<0.3,0,NA)))
-    })
-    
-    return(msimp)
-  }, mc.cores = 12)
-  
-  m_out <- do.call(cbind, arr_by_chrom) #[[1]],arr_by_chrom[[3]])
-  return(m_out)
-  
-  # arr_by_chrom <- mclapply(unique(p$chrom), function(chrom) {
-  #   mc <- m[,p$probe[p$chrom==chrom]]
-  #   
-  #   i <- 1
-  #   j <- 2
-  #   
-  #   k <- 1
-  #   mk <- matrix(nrow=nrow(mc),ncol = 0)
-  #   p$k <- NA
-  #   
-  #   while(j < ncol(mc)) {
-  #     test <- apply(mc[,i:j],1,n_distinct)
-  #     
-  #     if(all(test == 1)) {
-  #       j <- j + 1
-  #       next
-  #     }
-  #     
-  #     id <- sprintf("%s-S%s", chrom, k)
-  #     
-  #     mk <- cbind(mk, mc[,i])
-  #     colnames(mk)[k] = id
-  #     p$k[p$probe %in% colnames(mc)[i:j]] <- id
-  #     
-  #     i <- j
-  #     j <- j + 1
-  #     k <- k + 1
-  #   }
-  #   
-  #   return(mk)
-  # }, mc.cores = 24)
-  # 
-  # m_out <- do.call(cbind, arr_by_chrom) #[[1]],arr_by_chrom[[3]])
-  # return(m_out)
-}
+library(phangorn)
 
 ## --------------------------------------------------------------------------------------------------------
 ##
 ## --------------------------------------------------------------------------------------------------------
 
 ## Define probes
-homog_cortex_probeids  = rownames(binarized_dkfz_cortex)[hyper_hypo_probes_dkfz_cortex]
+
+## Select promoter probes
+promoter_probes <- probemap$probe[which(probemap$location == "promoter")]
+
+homog_cortex_probeids  = rownames(binarized_dkfz_cortex)[hyper_hypo_probes_dkfz_cortex] #, promoter_probes)
 hetero_cortex_probeids = rownames(binarized_dkfz_cortex)[!hyper_hypo_probes_dkfz_cortex]
 
 # Subset homogeneous probes in normals to use as "root"
@@ -138,47 +52,49 @@ use_beta <- TRUE
 
 pts <- unique(meta$Patient)
 pts <- "VUmc-04"
+pt <- "VUmc-04"
+
+runIQTree <- function(f) {
+  system(sprintf("/home/barthf/miniconda3/bin/iqtree -s %s -B 1000 -bnni -alrt 1000 -o ROOT -redo", f), ignore.stdout = TRUE)
+  treef <- sprintf("%s.contree",f)
+  return(read.tree(treef))
+}
 
 plotlist <- lapply (pts, function(pt) {
-  message(pt)
   
   phylo_accesssions <- meta$Sentrix_Accession[meta$Patient == pt]
   
-  if (determine_all) {
-    with_root <- TRUE
-    m1 <- t(binarized_ms[, phylo_accesssions])
-    m2 <- t(binarized_dkfz_cortex[,1,drop=F])
-    #m2[1,hetero_cortex_probeids] = NA
-    rownames(m2) <- 'ROOT'
-    m = rbind(m1, m2)
-  } else if (determine_heterog) {
-    with_root <- FALSE
-    m <- t(binarized_ms_heterog_cortex[, phylo_accesssions])
-  } else if(with_root) {
-    message(sprintf(" ... running in rooted mode using n=%s probes", nrow(binarized_ms_homog_cortex)))
-    if(use_beta) {
-      m <- t(b[rownames(binarized_ms_homog_cortex), phylo_accesssions])
-      m <- rbind(m, t(homog_root))
-      m <- simplMatrix(m, binary = FALSE, purity = c(meta$PAMES[match(phylo_accesssions, meta$Sentrix_Accession)], 1)) 
-    } else {
-      m <- t(binarized_ms_homog_cortex[, c(phylo_accesssions, 'ROOT')])
-      m <- simplMatrix(m, binary = TRUE) 
-    }
-  }
-  else {
-    m <- t(binarized_ms_homog_cortex[, phylo_accesssions])
-  }
+  ## Print some verbose run info
+  message(pt)
+  message(sprintf(" ... running in rooted mode using n=%s probes", nrow(binarized_ms_homog_cortex)))
   
-  cat(sprintf(">%s\n%s\n", rownames(m), apply(m,1,function(x) paste(x,sep="",collapse=""))), sep = "", file = sprintf("results/fa/%s-simple.fa", pt))
+  ## Build a DNA character matrix by converting beta-values into binary methylated/unmethylated states
+  m <- t(b[rownames(binarized_ms_homog_cortex), phylo_accesssions])
+  m <- rbind(m, t(homog_root))
+  m <- simplMatrix(m, binary = FALSE, purity = c(meta$PAMES[match(phylo_accesssions, meta$Sentrix_Accession)], 1)) 
+  
+  ## Write the character matrix to a file so it can be analyzed by a software such as IQ-Tree
+  #cat(sprintf(">%s\n%s\n", rownames(m), apply(m,1,function(x) paste(x,sep="",collapse=""))), sep = "", file = sprintf("results/fa/%s-simple.fa", pt))
+  
+  ## Matrix to phyDat
+  mphy <- as.phyDat(m, type = "USER", levels = c(0,1), ambiguity=NA)
+  
+  ## Export phydat to phylip format
+  phyfile <- sprintf("results/phy/%s.phy",pt)
+  write.phyDat(mphy, file = phyfile, format = "phylip", colsep = "", nbcol = -1)
+  
+  ## Run IQ-TREE for a given phyDat
+  tre <- runIQTree(phyfile)
   
   ## Retreive metadata
   smeta <- meta[meta$Patient == pt,] %>% 
     arrange(PAMES) %>% 
     mutate(N=1:n())
   
-  if(with_root)
-    smeta <- rbind(smeta, c("ROOT", rep(NA, ncol(smeta)-1)))
+  ## Append a ROOT taxon to the metadata table
+  smeta <- rbind(smeta, c("ROOT", rep(NA, ncol(smeta)-1)))
   
+  ## Fix some processing issues in the metadata table
   rownames(smeta) <- smeta$Sentrix_Accession
   smeta <- smeta %>% 
     dplyr::rename(label = Sentrix_Accession) %>% 
@@ -209,16 +125,27 @@ plotlist <- lapply (pts, function(pt) {
   #d <- as.matrix(d) / pm
   
   ## Perform neighbor joining for tree building
-  tre <- bionj(d)
+  tre <- nj(d)
+  tre <- root(tre, outgroup = 'ROOT', resolve.root = TRUE)
   
-  mphy <- as.phyDat(m, type = "USER", levels = c(0,1))
+  ## Compute Consistency and Retention indices
+  ## See https://en.wikipedia.org/wiki/Cladogram#Consistency_index
+  ri <- RI(tre, mphy)
+  ci <- CI(tre, mphy)
   
-  pars <- parsimony(tre, mphy)
+  ## Compute maximum-likelihood tree
   
-  tre.pars <- optim.parsimony(tre, mphy)
+  fit_ini <- pml(tre, mphy, k = 4)
+  fit_fin <- optim.pml(fit_ini, optNni = TRUE, optBf = TRUE, optQ = TRUE, optGamma = TRUE, optRooted = TRUE)
+  
+  aic_ini <- AIC(fit_ini)
+  aic_fin <- AIC(fit_fin)
+  
+  #pars <- parsimony(tre, mphy)
+  #tre.pars <- optim.parsimony(tre, mphy)
   
   if(with_root)
-    tre <- root(tre, outgroup = 'ROOT', resolve.root = TRUE)
+    
   
   #tre <- compute.brtime(tre)
   
@@ -282,6 +209,8 @@ plotlist <- lapply (pts, function(pt) {
     ## H0: the tree fits the Yule model OR is less balanced relative to Yule model (selection)
     ## H1: the tree is balanced relative to Yule model (neutral)
     
+    capture.output({
+    
     yule_p <- likelihood.test(as.treeshape(tre), model = "yule", alternative = "less")
     pda_p  <- likelihood.test(as.treeshape(tre), model = "pda", alternative = "less")
     
@@ -290,6 +219,8 @@ plotlist <- lapply (pts, function(pt) {
     
     sackin_yule <- sackin.test(as.treeshape(tre), model = "yule", alternative = "less")
     sackin_pda  <- sackin.test(as.treeshape(tre), model = "pda", alternative = "less")
+    
+    })
     
     shape_txt <- sprintf("Yule: %s (P=%s), PDA: %s (P=%s)\nColless: %s (P-yule = %s, P-pda = %s)\nSackin: %s (P-yule = %s, P-pda = %s)", 
                          round(yule_p$statistic,2), scientific(yule_p$p.value, digits = 2), round(pda_p$statistic,2), scientific(pda_p$p.value, digits = 2),
@@ -304,13 +235,12 @@ plotlist <- lapply (pts, function(pt) {
   if(with_root) {
     rootedge <- tib$branch.length[which(tib$label == 'ROOT')]
     p <- ggtree(gtre, aes(alpha = ifelse(label=='ROOT', 't','f'))) + 
-      geom_tippoint(aes(color = Subtype), size = 3 ) +
-      geom_nodelab(aes(x=branch, label=round(edge.length, 2)), vjust=-.5, size=3) +
+      geom_tippoint(aes(color = Subtype), size = 3 ) + #geom_nodelab(aes(x=branch, label=round(edge.length, 2)), vjust=-.5, size=3) +
       geom_tiplab(aes(label = N), offset = (rootedge + max(d))*0.01) +
       geom_treescale() + #scale_x_continuous() +
       geom_rootedge(rootedge = rootedge) +
-      #ggtitle(sprintf("%s, n=%s samples, n=%s features\nTumor tip/interal coef: %s, Root/tumor coef: %s\n%s", pt, nrow(m)-1, ncol(m), round(tumor_tip_interal_edge_coef,2), round(tumor_root_clade_coef,2), shape_txt)) +
-      #xlim(-rootedge,max(d)+max(d)*0.01)+
+      ggtitle(sprintf("%s, n=%s samples, n=%s features\nTumor tip/interal coef: %s, Root/tumor coef: %s\nCI: %s, RI: %s\n%s", pt, nrow(m)-1, ncol(m), round(tumor_tip_interal_edge_coef,2), round(tumor_root_clade_coef,2), round(ci,3), round(ri,3), shape_txt)) +
+      xlim(-rootedge,max(d)+max(d)*0.01)+
       scale_color_manual(values = subtype_cols) +
       scale_alpha_manual(values = c('t'=0,'f'=1)) +
       theme(legend.position='none')
