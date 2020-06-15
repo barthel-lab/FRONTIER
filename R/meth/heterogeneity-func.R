@@ -10,13 +10,13 @@ simplMatrix <- function(m, binary = TRUE, purity = 1) {
   p <- probemap[match(colnames(m), probemap$probe),]
   
   ## Determine chromosomes to iterate over
-  #chroms <- unique(p$chrom)
+  chroms <- unique(p$chrom)
   
   ## Select a set of chromosomes with infrequent copy number changes
-  chroms <- c("chr2","chr5","chr6","chr16","chr17","chr18")
+  #chroms <- c("chr2","chr5","chr6","chr16","chr17","chr18")
   
   ## Verbose message
-  message(" ... Using chromosomes ", paste(c("chr2","chr5","chr6","chr16","chr17","chr18"),collapse=", "))
+  message(" ... Using chromosomes ", paste(chroms, collapse=", "))
   
   ## Iterate over chromosomes
   arr_by_chrom <- mclapply(chroms, function(chrom) {
@@ -74,4 +74,11 @@ simplMatrix <- function(m, binary = TRUE, purity = 1) {
   
   m_out <- do.call(cbind, arr_by_chrom) #[[1]],arr_by_chrom[[3]])
   return(m_out)
+}
+
+runIQTree <- function(f, redo = FALSE) {
+  treef <- sprintf("%s.contree",f)
+  if(!file.exists(treef) | redo)
+    system(sprintf("/home/barthf/miniconda3/bin/iqtree -s %s -B 1000 -bnni -alrt 1000 -o ROOT -redo", f), ignore.stdout = TRUE)
+  return(read.tree(treef))
 }

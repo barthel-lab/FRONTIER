@@ -12,6 +12,7 @@ source("R/meth/heterogeneity-func.R")
 library(apTreeshape)
 library(geiger)
 library(phangorn)
+library(phytools)
 
 ## --------------------------------------------------------------------------------------------------------
 ##
@@ -38,27 +39,9 @@ binarized_ms_homog_cortex = cbind(binarized_ms_homog_cortex, homog_root)
 # Subset tumor samples in multi-sector cohort using probes heterogeneous in normals
 binarized_ms_heterog_cortex = binarized_ms[hetero_cortex_probeids,]
 
-## flag to determine whether to include the ROOT (computed from 16 normal cortex samples)
-with_root <- TRUE
-
-# Flag to activate to analyze heterogeneous probes
-determine_heterog <- FALSE
-
-# Flag to determine whether to analyze all probes
-determine_all <- FALSE
-
-## Flag to determine whether to analyze beta values rather than binarized data
-use_beta <- TRUE
-
-pts <- unique(meta$Patient)
+pts <- sort(unique(meta$Patient)) #unique(meta$Patient)
 pts <- "VUmc-04"
 pt <- "VUmc-04"
-
-runIQTree <- function(f) {
-  system(sprintf("/home/barthf/miniconda3/bin/iqtree -s %s -B 1000 -bnni -alrt 1000 -o ROOT -redo", f), ignore.stdout = TRUE)
-  treef <- sprintf("%s.contree",f)
-  return(read.tree(treef))
-}
 
 plotlist <- lapply (pts, function(pt) {
   
@@ -81,10 +64,17 @@ plotlist <- lapply (pts, function(pt) {
   
   ## Export phydat to phylip format
   phyfile <- sprintf("results/phy/%s.phy",pt)
-  write.phyDat(mphy, file = phyfile, format = "phylip", colsep = "", nbcol = -1)
+  if(!file.exists(phyfile)) {
+    write.phyDat(mphy, file = phyfile, format = "phylip", colsep = "", nbcol = -1)
+  }
   
   ## Run IQ-TREE for a given phyDat
   tre <- runIQTree(phyfile)
+  tre <- reroot(tre, MRCA(tre, "ROOT"))
+  #tre <- root(tre, outgroup = 'ROOT', resolve.root = TRUE)
+  
+  ## Set root as length of ROOT node
+  #tre$root.edge <- tre$edge.length[tre$tip.label=="ROOT"]
   
   ## Retreive metadata
   smeta <- meta[meta$Patient == pt,] %>% 
@@ -92,23 +82,62 @@ plotlist <- lapply (pts, function(pt) {
     mutate(N=1:n())
   
   ## Append a ROOT taxon to the metadata table
-  smeta <- rbind(smeta, c("ROOT", rep(NA, ncol(smeta)-1)))
+  smeta <- smeta %>% add_row(Sentrix_Accession = "ROOT") %>% as.data.frame()
   
   ## Fix some processing issues in the metadata table
   rownames(smeta) <- smeta$Sentrix_Accession
   smeta <- smeta %>% 
-    dplyr::rename(label = Sentrix_Accession) %>% 
-    mutate(label = factor(label),
-           Dist_to_nCE_surface = as.numeric(Dist_to_nCE_surface),
-           Dist_to_CE_surface = as.numeric(Dist_to_CE_surface)) %>%
-    mutate(Dist_to_nCE_surface = ifelse(is.na(Dist_to_nCE_surface), 0, Dist_to_nCE_surface),
-           Dist_to_CE_surface = ifelse(is.na(Dist_to_CE_surface), 0, Dist_to_CE_surface))
+    dplyr::rename(label = Sentrix_Accession)
   
   ## Order as `m`
   smeta <- smeta[match(rownames(m),smeta$label),]
   
   ## identify tumor clade
   tumor_samples <- as.character(smeta$label[grepl("Tumor",smeta$Class)])
+  ## Identify "root" node
+  root_node <- MRCA(tre,rownames(m))
+  ## Identify most recent common ancestor of all tumor samples
+  tumor_clade_node <- MRCA(tre,na.omit(tumor_samples))
+  ## Identify root tip
+  ## This "outgroup" signifies a the methylation profile of an unsampled normal cell population
+  root_tip_node <- which(tre$tip.label == "ROOT")
+  ## Identify ancestor shared by all samples EXCEPT the ROOT
+  sampled_root_node <- MRCA(tre, setdiff(rownames(m), "ROOT"))
+  
+  ## Calibrate chronogram by defining minimum age (birth) and maximum age (cancer dx)
+  age <- na.omit(unique(smeta$Age))
+  stopifnot(length(age) <= 1)
+  
+  if(length(age) == 0) {
+    age <- 65
+  }
+  
+  calib <- rbind(makeChronosCalib(tre, node = sampled_root_node, age.min = 0, age.max = age),
+                 makeChronosCalib(tre, node = root_node, age.min = age, age.max = age))
+  
+  ## Fit chronogram
+  chro <- chronos(tre, model = "discrete", calibration = calib, control = chronos.control(nb.rate.cat = 2))
+  class(chro) <- "phylo" ## fixes issues with ggtree not being able to plot "chrono" type objects
+  
+  #plot(chro)
+  #add.scale.bar(x=0, y=1)
+  
+  #attr(chro, "rates")
+  
+  ## Time the MRCA for the tumor
+  tumor_mrca_age <- dist.nodes(chro)[tumor_clade_node,root_node]
+  
+  chro_km <- bd.km(chro)
+  chro_ms <- bd.ms(chro)
+  
+  ## Perform a lineage-through-time analysis and compute Pybus & Harvey's gamma statistic
+  capture.output({
+    lttchro <- ltt(chro)
+    ltt_y <- lttchro$gamma
+    ltt_p <- lttchro$p
+  })
+  
+  #pd(match.phylo.comm(phy = tre, comm = as.matrix(smeta))$comm, tre, include.root = FALSE)
   
   ## Construct purity matrix
   #smeta$PAMES <- as.numeric(smeta$PAMES)
@@ -119,54 +148,45 @@ plotlist <- lapply (pts, function(pt) {
   #rownames(pm) <- smeta$label
   
   ## Define distance matrix
-  d <- dist(m, method = "binary")
+  #d <- dist(m, method = "binary")
+  #tre2 <- bionj(d)
+  
+  ## Verify NJ
+  ## See https://www.reconlearn.org/post/practical-phylogenetics.html
+  #x <- as.vector(d)
+  #y <- as.vector(as.dist(cophenetic(tre2)))
+  #plot(x, y, xlab = "original pairwise distances", ylab = "pairwise distances on the tree",
+  #    main = "Is NJ appropriate?", pch = 20, cex = 3)
+  #abline(lm(y~x), col = "red")
   
   ## Adjust distance matrix according to purity matrix
   #d <- as.matrix(d) / pm
   
   ## Perform neighbor joining for tree building
-  tre <- nj(d)
-  tre <- root(tre, outgroup = 'ROOT', resolve.root = TRUE)
+  #tre2 <- bionj(d)
+  #tre2 <- root(tre2, outgroup = 'ROOT', resolve.root = TRUE)
   
   ## Compute Consistency and Retention indices
   ## See https://en.wikipedia.org/wiki/Cladogram#Consistency_index
   ri <- RI(tre, mphy)
   ci <- CI(tre, mphy)
   
-  ## Compute maximum-likelihood tree
-  
-  fit_ini <- pml(tre, mphy, k = 4)
-  fit_fin <- optim.pml(fit_ini, optNni = TRUE, optBf = TRUE, optQ = TRUE, optGamma = TRUE, optRooted = TRUE)
-  
-  aic_ini <- AIC(fit_ini)
-  aic_fin <- AIC(fit_fin)
-  
-  #pars <- parsimony(tre, mphy)
-  #tre.pars <- optim.parsimony(tre, mphy)
-  
-  if(with_root)
-    
-  
-  #tre <- compute.brtime(tre)
-  
   tib <- tre %>% as_tibble()
   
   ## Compute root to tumor MRCA distance
   ## Great 101 on phylogenetics calculations here https://www.r-phylo.org/wiki/HowTo/DataTreeManipulation
   
-  ## Identify most recent common ancestor of all tumor samples
-  tumor_clade_node <- MRCA(tre,na.omit(tumor_samples))
-  ## Identify root node
-  root_tip_node <- which(tre$tip.label == "ROOT")
   ## Compute distance from root to tumor MRCA
-  root_dist <- dist.nodes(tre)[root_tip_node,tumor_clade_node]
+  root_tumor_dist <- dist.nodes(tre)[root_tip_node,tumor_clade_node]
   ## Compute the largest distance from the root to any sample - set this as tree size
   tree_size <- max(dist.nodes(tre)[root_tip_node,])
-  ## Compute tumor clade size
-  tumor_dist <- tree_size - root_dist
   
   ## Identify tips in tumor clade
   tumor_tips <- which(tre$tip.label %in% na.omit(tumor_samples))
+  
+  ## Compute tumor clade size
+  tumor_clade_size <- max(dist.nodes(tre)[tumor_clade_node,tumor_tips]) # tree_size - root_tumor_dist
+  
   ## Identify edges associated with tips in tumor clade
   tumor_tip_edges <- which(tre$edge[,2] %in% tumor_tips)
   ## Identify all edges in tumor clade
@@ -185,12 +205,12 @@ plotlist <- lapply (pts, function(pt) {
   tumor_internal_edge_lengths <- tre$edge.length[setdiff(tumor_edges, tumor_tip_edges)]
   
   ## Compute distance along the phylogenetic tree within tumor clade
-  tumor_total_internal_edge_length <- max(dist.nodes(tre)[tumor_clade_node,tumor_internal_descendants])
+  tumor_max_internal_branch_length <- max(dist.nodes(tre)[tumor_clade_node,tumor_internal_descendants])
   ## Compute maximum terminal branch length in tumor clade
-  tumor_max_tip_edge_length <- max(tumor_tip_edge_lengths)
+  tumor_max_tip_length <- max(tumor_tip_edge_lengths)
   
-  tumor_tip_interal_edge_coef <- tumor_max_tip_edge_length / tumor_total_internal_edge_length
-  tumor_root_clade_coef <- root_dist / tumor_dist
+  tumor_tip_interal_edge_coef <- tumor_max_tip_length / tumor_max_internal_branch_length
+  tumor_root_clade_coef <- root_tumor_dist / tumor_clade_size
   
   ## Here's a great start on some metrics to analyze tree shape
   ## https://biology.stackexchange.com/questions/42278/what-are-some-useful-starter-metrics-to-use-on-phylogenetic-trees
@@ -209,65 +229,62 @@ plotlist <- lapply (pts, function(pt) {
     ## H0: the tree fits the Yule model OR is less balanced relative to Yule model (selection)
     ## H1: the tree is balanced relative to Yule model (neutral)
     
+    ## Update 2020/06/13: The Yule model is Neutral so it would be better as follows:
+    ## H0: the tree fits the Yule model OR is more balanced relative to Yule model (neutral)
+    ## H1: the tree is less balanced relative to Yule model (selection)
+    
     capture.output({
     
-    yule_p <- likelihood.test(as.treeshape(tre), model = "yule", alternative = "less")
-    pda_p  <- likelihood.test(as.treeshape(tre), model = "pda", alternative = "less")
+    yule_p <- likelihood.test(as.treeshape(tre), model = "yule", alternative = "greater")
+    pda_p  <- likelihood.test(as.treeshape(tre), model = "pda", alternative = "greater")
     
-    colless_yule <- colless.test(as.treeshape(tre), model = "yule", alternative = "less")
-    colless_pda  <- colless.test(as.treeshape(tre), model = "pda", alternative = "less")
+    colless_yule <- colless.test(as.treeshape(tre), model = "yule", alternative = "greater")
+    colless_pda  <- colless.test(as.treeshape(tre), model = "pda", alternative = "greater")
     
-    sackin_yule <- sackin.test(as.treeshape(tre), model = "yule", alternative = "less")
-    sackin_pda  <- sackin.test(as.treeshape(tre), model = "pda", alternative = "less")
+    sackin_yule <- sackin.test(as.treeshape(tre), model = "yule", alternative = "greater")
+    sackin_pda  <- sackin.test(as.treeshape(tre), model = "pda", alternative = "greater")
     
     })
+    shape_txt <- sprintf("Yule: %s (LR-P=%s)\nColless: %s (P=%s), Sackin: %s (P=%s)", 
+                         round(yule_p$statistic,2), scientific(yule_p$p.value, digits = 2),
+                         colless_yule$statistic, scientific(colless_yule$p.value, digits = 2),
+                         sackin_yule$statistic, scientific(sackin_yule$p.value, digits = 2))
     
-    shape_txt <- sprintf("Yule: %s (P=%s), PDA: %s (P=%s)\nColless: %s (P-yule = %s, P-pda = %s)\nSackin: %s (P-yule = %s, P-pda = %s)", 
-                         round(yule_p$statistic,2), scientific(yule_p$p.value, digits = 2), round(pda_p$statistic,2), scientific(pda_p$p.value, digits = 2),
-                         colless_yule$statistic, scientific(colless_yule$p.value, digits = 2), scientific(colless_pda$p.value, digits = 2),
-                         sackin_yule$statistic, scientific(sackin_yule$p.value, digits = 2), scientific(sackin_pda$p.value, digits = 2))
+    #shape_txt <- sprintf("Yule: %s (P=%s), PDA: %s (P=%s)\nColless: %s (P-yule = %s, P-pda = %s)\nSackin: %s (P-yule = %s, P-pda = %s)", 
+    #                     round(yule_p$statistic,2), scientific(yule_p$p.value, digits = 2), round(pda_p$statistic,2), scientific(pda_p$p.value, digits = 2),
+    #                     colless_yule$statistic, scientific(colless_yule$p.value, digits = 2), scientific(colless_pda$p.value, digits = 2),
+    #                     sackin_yule$statistic, scientific(sackin_yule$p.value, digits = 2), scientific(sackin_pda$p.value, digits = 2))
   } else {
     shape_txt = ""
   }
   
-  gtre <- as_tibble(tre) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
+  res <- tibble(patient = pt, age, tumor_mrca_age, root_node, sampled_root_node, tumor_clade_node, root_tumor_dist, tree_size, tumor_clade_size, tumor_max_internal_branch_length, tumor_max_tip_length)
   
-  if(with_root) {
-    rootedge <- tib$branch.length[which(tib$label == 'ROOT')]
-    p <- ggtree(gtre, aes(alpha = ifelse(label=='ROOT', 't','f'))) + 
-      geom_tippoint(aes(color = Subtype), size = 3 ) + #geom_nodelab(aes(x=branch, label=round(edge.length, 2)), vjust=-.5, size=3) +
-      geom_tiplab(aes(label = N), offset = (rootedge + max(d))*0.01) +
-      geom_treescale() + #scale_x_continuous() +
-      geom_rootedge(rootedge = rootedge) +
-      ggtitle(sprintf("%s, n=%s samples, n=%s features\nTumor tip/interal coef: %s, Root/tumor coef: %s\nCI: %s, RI: %s\n%s", pt, nrow(m)-1, ncol(m), round(tumor_tip_interal_edge_coef,2), round(tumor_root_clade_coef,2), round(ci,3), round(ri,3), shape_txt)) +
-      xlim(-rootedge,max(d)+max(d)*0.01)+
-      scale_color_manual(values = subtype_cols) +
-      scale_alpha_manual(values = c('t'=0,'f'=1)) +
-      theme(legend.position='none')
+  gtre <- as_tibble(tre) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
+
+  #rootedge <- tib$branch.length[which(tib$label == 'ROOT')]
+  p <- ggtree(gtre) + # , aes(alpha = ifelse(label=='ROOT', 't','f'))
+    geom_tippoint(aes(color = Subtype), size = 3 ) + #geom_nodelab(aes(x=branch, label=round(edge.length, 2)), vjust=-.5, size=3) +
+    geom_tiplab(aes(label = N)) +
+    geom_treescale() + #scale_x_continuous() +
+    ggtitle(sprintf("%s, n=%s tax, n=%s ch, age=%s/%s\nTumor tip/interal coef: %s, Root/tumor coef: %s\nCI: %s, RI: %s, y=%s, P(y)=%s\nM-S: %s, K-M: %s. %s", pt, nrow(m)-1, ncol(m), round(tumor_mrca_age,1), age, round(tumor_tip_interal_edge_coef,2), round(tumor_root_clade_coef,2), round(ci,3), round(ri,3), round(ltt_y,2), scientific(ltt_p, digits = 2), round(chro_ms,3), round(chro_km,3), shape_txt)) +
+    scale_color_manual(values = subtype_cols) + #scale_alpha_manual(values = c('t'=0,'f'=1)) +
+    theme(legend.position='none')
+  
+  # tre2 <- treeio::drop.tip(tre, "ROOT", root.edge = 1)
+  
+  ## View tumor clade only
+  ## viewClade(p, MRCA(tre,na.omit(tumor_samples)))
+  
+  ## Some useful docs on clade annotation here
+  ## http://bioconductor.jp/packages/3.1/bioc/vignettes/ggtree/inst/doc/ggtree.html
     
-    # tre2 <- treeio::drop.tip(tre, "ROOT", root.edge = 1)
-    
-    ## View tumor clade only
-    ## viewClade(p, MRCA(tre,na.omit(tumor_samples)))
-    
-    ## Some useful docs on clade annotation here
-    ## http://bioconductor.jp/packages/3.1/bioc/vignettes/ggtree/inst/doc/ggtree.html
-    
-    p <- p + geom_hilight(node = tumor_clade_node, fill = "black", alpha = 0.2, extend = (rootedge + max(d))*0.03) + 
-      geom_cladelabel(node = tumor_clade_node, label = "Tumor", offset=(rootedge + max(d))*0.03, angle = 270, hjust = 0.5) +
-      geom_nodepoint(aes(shape = ifelse(node == tumor_clade_node, 't', 'f')), size = 3, color = "red") + 
-      scale_shape_manual(values = c('t'=8,'f'=NA))
+  p <- p + geom_hilight(node = tumor_clade_node, fill = "black", alpha = 0.2) + 
+    geom_cladelabel(node = tumor_clade_node, label = "Tumor", angle = 270, hjust = 0.5) +
+    geom_nodepoint(aes(shape = ifelse(node == tumor_clade_node, 't', 'f')), size = 3, color = "red") + 
+    scale_shape_manual(values = c('t'=8,'f'=NA))
       
-    
-    p$data$y[which(p$data$branch.length==0)[1]] <- p$data$y[which(p$data$branch.length==0)[2]]
-  } else {
-    p <- ggtree(tre) + 
-      geom_tippoint(aes(color = Subtype), size = 3 ) +
-      geom_tiplab(aes(label = N), offset = max(d)*0.01) + #geom_treescale() + #scale_x_continuous() + ggtitle(sprintf("Phylogenetic tree for %s\nTree constructed using improved NJ over a binary distance matrix", pt)) +
-      xlim(0,max(d)+max(d)*0.01)+
-      scale_color_manual(values = subtype_cols) +
-      theme(legend.position='none')
-  }
+  #p$data$y[which(p$data$branch.length==0)[1]] <- p$data$y[which(p$data$branch.length==0)[2]]
   
   plot(p)
   return(p)

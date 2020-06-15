@@ -29,7 +29,7 @@ meta <- pData(all_data) %>%
   as.data.frame() %>%
   filter(!filter) %>% ## only keep multisector samples
   mutate(Cell_Predict2 = factor(ifelse(is.na(Cell_Predict), Sample_Type, Cell_Predict), levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-low", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Granulation", "Cortex")))) %>%
-  select(Sentrix_Accession, Dataset, Subtype = Cell_Predict2, Patient, Sample_Name, Biopsy, IDH = IDH_Predict, TumorNormal = TvsN_Predict, Location, PAMES = purity, X, Y, Z, Dist_to_nCE_surface, Dist_to_CE_surface) %>%
+  select(Sentrix_Accession, Dataset, Subtype = Cell_Predict2, Patient, Sample_Name, Age, Biopsy, IDH = IDH_Predict, TumorNormal = TvsN_Predict, Location, PAMES = purity, X, Y, Z, Dist_to_nCE_surface, Dist_to_CE_surface) %>%
   mutate(Class = case_when(Subtype == "Cortex" ~ "Normal",
                            Subtype == "Inflammatory-TME" ~ "Normal",
                            Subtype == "Reactive-TME" ~ "Normal",
