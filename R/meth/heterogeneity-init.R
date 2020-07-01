@@ -2,7 +2,7 @@
 ## Project: FRONTIER
 ## Script purpose: Initiate data for heterogeneity analyses
 ## Created: Aug 7, 2019
-## Updated: June 12, 2020
+## Updated: June 15, 2020
 ## Author: Floris Barthel
 ##################################################
 
@@ -25,11 +25,15 @@ library(egg)
 load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 load("sandbox/meth-probe-anno.Rdata")
 
+## Load Niel's meta file
+nielsm <- read.csv("sandbox/FRONTIER.QC.filtered.metadata_20200603_p01adj.csv", as.is = TRUE) %>% 
+  transmute(Sentrix_Accession, HBclass, HBsubclass = trimws(HBsubclass), T01, T02, FLR, T1G, PA.C, PA.W, PA.R, HE = Cellularity_median, MIB = ProliferationIndex_median)
+
 meta <- pData(all_data) %>% 
   as.data.frame() %>%
   filter(!filter) %>% ## only keep multisector samples
   mutate(Cell_Predict2 = factor(ifelse(is.na(Cell_Predict), Sample_Type, Cell_Predict), levels = rev(c("Classic-like", "Mesenchymal-like", "G-CIMP-low", "G-CIMP-high", "Codel", "Inflammatory-TME", "Reactive-TME", "Granulation", "Cortex")))) %>%
-  select(Sentrix_Accession, Dataset, Subtype = Cell_Predict2, Patient, Sample_Name, Age, Biopsy, IDH = IDH_Predict, TumorNormal = TvsN_Predict, Location, PAMES = purity, X, Y, Z, Dist_to_nCE_surface, Dist_to_CE_surface) %>%
+  select(Sentrix_Accession, Dataset, Subtype = Cell_Predict2, Patient, Sample_Name, Age, Biopsy, IDH = IDH_Predict, TumorNormal = TvsN_Predict, Location, PAMES = purity, X = X_corrected, Y = Y_corrected, Z = Z_corrected, Dist_to_nCE_surface, Dist_to_CE_surface) %>%
   mutate(Class = case_when(Subtype == "Cortex" ~ "Normal",
                            Subtype == "Inflammatory-TME" ~ "Normal",
                            Subtype == "Reactive-TME" ~ "Normal",
@@ -38,7 +42,8 @@ meta <- pData(all_data) %>%
                            Subtype == "Mesenchymal-like" ~ "Tumor-IDHwt",
                            Subtype == "Classic-like" ~ "Tumor-IDHwt",
                            TRUE ~ NA_character_),
-         Patient_Class = sprintf("%s*%s", Patient, Class))
+         Patient_Class = sprintf("%s*%s", Patient, Class)) %>%
+  left_join(nielsm)
 
 control_meta = pData(all_data) %>% as.data.frame() %>% filter(Dataset == "DKFZ")
 
@@ -104,5 +109,7 @@ probemap <- probemap[match(rownames(b), probemap$probe),] %>%
   group_by(chrom) %>%
   mutate(pos_diff = pos - lag(pos),
          is_ordered = pos > lag(pos))
+
+write.csv(meta, file = "sandbox/FRONTIER.meta.csv", row.names = FALSE)
 
 ## END ##

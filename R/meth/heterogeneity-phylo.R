@@ -2,9 +2,12 @@
 ## Project: FRONTIER
 ## Script purpose: Draw phylo trees
 ## Created: Aug 7, 2019
-## Updated: June 12, 2020
+## Updated: June 18, 2020
 ## Author: Floris Barthel
 ##################################################
+
+options(rgl.useNULL = TRUE)
+options(rgl.printRglwidget = TRUE)
 
 source("R/meth/heterogeneity-init.R")
 source("R/meth/heterogeneity-func.R")
@@ -13,6 +16,9 @@ library(apTreeshape)
 library(geiger)
 library(phangorn)
 library(phytools)
+library(ggrepel)
+library(rgl)
+library(magick) ## Requires LD_LIBRARY_PATH is correctly set
 
 ## --------------------------------------------------------------------------------------------------------
 ##
@@ -40,10 +46,10 @@ binarized_ms_homog_cortex = cbind(binarized_ms_homog_cortex, homog_root)
 binarized_ms_heterog_cortex = binarized_ms[hetero_cortex_probeids,]
 
 pts <- sort(unique(meta$Patient)) #unique(meta$Patient)
-pts <- "VUmc-04"
+#pts <- "VUmc-04"
 pt <- "VUmc-04"
 
-plotlist <- lapply (pts, function(pt) {
+frontier_phy <- lapply (pts, function(pt) {
   
   phylo_accesssions <- meta$Sentrix_Accession[meta$Patient == pt]
   
@@ -68,9 +74,12 @@ plotlist <- lapply (pts, function(pt) {
     write.phyDat(mphy, file = phyfile, format = "phylip", colsep = "", nbcol = -1)
   }
   
+  ## Distance matrix for plotting alongside phylogeny
+  d <- dist(m, method = "binary")
+  
   ## Run IQ-TREE for a given phyDat
   tre <- runIQTree(phyfile)
-  tre <- reroot(tre, MRCA(tre, "ROOT"))
+  tre <- reroot(tre, which(tre$tip.label=="ROOT")) #MRCA(tre, "ROOT"))
   #tre <- root(tre, outgroup = 'ROOT', resolve.root = TRUE)
   
   ## Set root as length of ROOT node
@@ -82,7 +91,7 @@ plotlist <- lapply (pts, function(pt) {
     mutate(N=1:n())
   
   ## Append a ROOT taxon to the metadata table
-  smeta <- smeta %>% add_row(Sentrix_Accession = "ROOT") %>% as.data.frame()
+  smeta <- smeta %>% add_row(Sentrix_Accession = "ROOT", Biopsy = "Root") %>% as.data.frame()
   
   ## Fix some processing issues in the metadata table
   rownames(smeta) <- smeta$Sentrix_Accession
@@ -116,60 +125,28 @@ plotlist <- lapply (pts, function(pt) {
                  makeChronosCalib(tre, node = root_node, age.min = age, age.max = age))
   
   ## Fit chronogram
-  chro <- chronos(tre, model = "discrete", calibration = calib, control = chronos.control(nb.rate.cat = 2))
-  class(chro) <- "phylo" ## fixes issues with ggtree not being able to plot "chrono" type objects
-  
-  #plot(chro)
-  #add.scale.bar(x=0, y=1)
-  
-  #attr(chro, "rates")
+  capture.output({
+    chro <- chronos(tre, model = "discrete", calibration = calib, control = chronos.control(nb.rate.cat = 2))
+    class(chro) <- "phylo" ## fixes issues with ggtree not being able to plot "chrono" type objects
+  })
   
   ## Time the MRCA for the tumor
   tumor_mrca_age <- dist.nodes(chro)[tumor_clade_node,root_node]
   
-  chro_km <- bd.km(chro)
-  chro_ms <- bd.ms(chro)
+  kendall_moran_speciation_rate <- bd.km(chro)
+  magallon_sanderson_diversication_rate <- bd.ms(chro)
   
   ## Perform a lineage-through-time analysis and compute Pybus & Harvey's gamma statistic
   capture.output({
     lttchro <- ltt(chro)
-    ltt_y <- lttchro$gamma
-    ltt_p <- lttchro$p
+    pybus_harvey_gamma <- lttchro$gamma
+    pybus_harvey_p <- lttchro$p
   })
-  
-  #pd(match.phylo.comm(phy = tre, comm = as.matrix(smeta))$comm, tre, include.root = FALSE)
-  
-  ## Construct purity matrix
-  #smeta$PAMES <- as.numeric(smeta$PAMES)
-  #smeta$PAMES[smeta$label == "ROOT"] = 1
-  
-  #pm <- matrix(smeta$PAMES) %*% matrix(smeta$PAMES,nrow=1)
-  #colnames(pm) <- smeta$label
-  #rownames(pm) <- smeta$label
-  
-  ## Define distance matrix
-  #d <- dist(m, method = "binary")
-  #tre2 <- bionj(d)
-  
-  ## Verify NJ
-  ## See https://www.reconlearn.org/post/practical-phylogenetics.html
-  #x <- as.vector(d)
-  #y <- as.vector(as.dist(cophenetic(tre2)))
-  #plot(x, y, xlab = "original pairwise distances", ylab = "pairwise distances on the tree",
-  #    main = "Is NJ appropriate?", pch = 20, cex = 3)
-  #abline(lm(y~x), col = "red")
-  
-  ## Adjust distance matrix according to purity matrix
-  #d <- as.matrix(d) / pm
-  
-  ## Perform neighbor joining for tree building
-  #tre2 <- bionj(d)
-  #tre2 <- root(tre2, outgroup = 'ROOT', resolve.root = TRUE)
   
   ## Compute Consistency and Retention indices
   ## See https://en.wikipedia.org/wiki/Cladogram#Consistency_index
-  ri <- RI(tre, mphy)
-  ci <- CI(tre, mphy)
+  retention_index <- RI(tre, mphy)
+  consistency_index <- CI(tre, mphy)
   
   tib <- tre %>% as_tibble()
   
@@ -209,8 +186,8 @@ plotlist <- lapply (pts, function(pt) {
   ## Compute maximum terminal branch length in tumor clade
   tumor_max_tip_length <- max(tumor_tip_edge_lengths)
   
-  tumor_tip_interal_edge_coef <- tumor_max_tip_length / tumor_max_internal_branch_length
-  tumor_root_clade_coef <- root_tumor_dist / tumor_clade_size
+  tumor_tip_interal_branch_coef <- tumor_max_tip_length / tumor_max_internal_branch_length
+  root_tumor_clade_coef <- root_tumor_dist / tumor_clade_size
   
   ## Here's a great start on some metrics to analyze tree shape
   ## https://biology.stackexchange.com/questions/42278/what-are-some-useful-starter-metrics-to-use-on-phylogenetic-trees
@@ -226,163 +203,328 @@ plotlist <- lapply (pts, function(pt) {
   
   if (length(tre$tip.label) > 4) {
     ## treeshape tests
-    ## H0: the tree fits the Yule model OR is less balanced relative to Yule model (selection)
-    ## H1: the tree is balanced relative to Yule model (neutral)
-    
     ## Update 2020/06/13: The Yule model is Neutral so it would be better as follows:
     ## H0: the tree fits the Yule model OR is more balanced relative to Yule model (neutral)
     ## H1: the tree is less balanced relative to Yule model (selection)
-    
     capture.output({
-    
-    yule_p <- likelihood.test(as.treeshape(tre), model = "yule", alternative = "greater")
-    pda_p  <- likelihood.test(as.treeshape(tre), model = "pda", alternative = "greater")
-    
-    colless_yule <- colless.test(as.treeshape(tre), model = "yule", alternative = "greater")
-    colless_pda  <- colless.test(as.treeshape(tre), model = "pda", alternative = "greater")
-    
-    sackin_yule <- sackin.test(as.treeshape(tre), model = "yule", alternative = "greater")
-    sackin_pda  <- sackin.test(as.treeshape(tre), model = "pda", alternative = "greater")
-    
+      colless_yule <- colless.test(as.treeshape(tre), model = "yule", alternative = "greater")
+      sackin_yule <- sackin.test(as.treeshape(tre), model = "yule", alternative = "greater")
+      
+      colless_stat <- colless_yule$statistic
+      sackin_stat <- sackin_yule$statistic
+      colless_p <- colless_yule$p.value
+      sackin_p <- sackin_yule$p.value
     })
-    shape_txt <- sprintf("Yule: %s (LR-P=%s)\nColless: %s (P=%s), Sackin: %s (P=%s)", 
-                         round(yule_p$statistic,2), scientific(yule_p$p.value, digits = 2),
-                         colless_yule$statistic, scientific(colless_yule$p.value, digits = 2),
-                         sackin_yule$statistic, scientific(sackin_yule$p.value, digits = 2))
-    
-    #shape_txt <- sprintf("Yule: %s (P=%s), PDA: %s (P=%s)\nColless: %s (P-yule = %s, P-pda = %s)\nSackin: %s (P-yule = %s, P-pda = %s)", 
-    #                     round(yule_p$statistic,2), scientific(yule_p$p.value, digits = 2), round(pda_p$statistic,2), scientific(pda_p$p.value, digits = 2),
-    #                     colless_yule$statistic, scientific(colless_yule$p.value, digits = 2), scientific(colless_pda$p.value, digits = 2),
-    #                     sackin_yule$statistic, scientific(sackin_yule$p.value, digits = 2), scientific(sackin_pda$p.value, digits = 2))
   } else {
-    shape_txt = ""
+    colless_stat <- NA
+    sackin_stat <- NA
+    colless_p <- NA
+    sackin_p <- NA
   }
   
-  res <- tibble(patient = pt, age, tumor_mrca_age, root_node, sampled_root_node, tumor_clade_node, root_tumor_dist, tree_size, tumor_clade_size, tumor_max_internal_branch_length, tumor_max_tip_length)
+  ## Build spatial tree (ROOT pruned)
+  trespat <- drop.tip(tre, 'ROOT')
+  trespat$tip.label <- smeta$Biopsy[match(trespat$tip.label,smeta$label)]
   
+  ## Plot phylogeny in 3D phylomorphospace
+  mspat3d <- as.matrix(smeta[-which(smeta$label=="ROOT"),c('X','Y','Z')])
+  rownames(mspat3d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
+  pmorph3d <- phylomorphospace3d(trespat, mspat3d, method = "dynamic")
+  phylomorphospace3d(trespat, mspat3d, method = "static")
+  
+  movie3d(pmorph3d,movie="phylomorph-3d",duration=10)
+  
+  #phylomorphospace3d(trespat, mspat, method = "dynamic", control = list(spin = TRUE, axes = TRUE))
+  
+  ## Plot in 2d phylospace
+  u = x / z;
+  v = y / z;
+  
+  mspat2d <- smeta[-which(smeta$label=="ROOT"), c('X','Y')]/smeta[1:nrow(smeta)-1,c('Z')]
+  rownames(mspat2d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
+  pmorph2d <- phylomorphospace(trespat, mspat2d, method = "dynamic")
+  
+  ## Plot phylogenetic tree
   gtre <- as_tibble(tre) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
-
-  #rootedge <- tib$branch.length[which(tib$label == 'ROOT')]
-  p <- ggtree(gtre) + # , aes(alpha = ifelse(label=='ROOT', 't','f'))
+  maxdist <- max(dist.nodes(tre))
+  
+  ptre <- ggtree(gtre) +
+    geom_tippoint(aes(color = Subtype), size = 3 ) +
+    guides(color = FALSE) +
+    geom_tiplab(aes(label = Biopsy), offset = maxdist * 0.01, align = TRUE) +
+    xlim(0, maxdist+maxdist*0.10) + 
+    scale_color_manual(values = subtype_cols, na.value = "gray")
+    
+  ptre_full <- ptre + 
+    labs(title = sprintf("Phylogenetic tree for %s", pt)) +
+    geom_treescale() +
+    geom_hilight(node = tumor_clade_node, fill = "tan", alpha = 0.2) + 
+    geom_cladelabel(node = tumor_clade_node, label = "Tumor", angle = 270, hjust = 0.5, offset = maxdist * 0.1, offset.text = maxdist * 0.03) +
+    geom_nodepoint(aes(shape = ifelse(node == tumor_clade_node, 't', 'f')), size = 3, color = "red") + 
+    scale_shape_manual(values = c('t'=8,'f'=NA)) +
+    guides(shape = FALSE)
+  
+  #plot(ptre)
+  
+  ## Plot chronogram
+  gchro <- as_tibble(chro) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
+  pchro <- ggtree(gchro) + 
     geom_tippoint(aes(color = Subtype), size = 3 ) + #geom_nodelab(aes(x=branch, label=round(edge.length, 2)), vjust=-.5, size=3) +
-    geom_tiplab(aes(label = N)) +
-    geom_treescale() + #scale_x_continuous() +
-    ggtitle(sprintf("%s, n=%s tax, n=%s ch, age=%s/%s\nTumor tip/interal coef: %s, Root/tumor coef: %s\nCI: %s, RI: %s, y=%s, P(y)=%s\nM-S: %s, K-M: %s. %s", pt, nrow(m)-1, ncol(m), round(tumor_mrca_age,1), age, round(tumor_tip_interal_edge_coef,2), round(tumor_root_clade_coef,2), round(ci,3), round(ri,3), round(ltt_y,2), scientific(ltt_p, digits = 2), round(chro_ms,3), round(chro_km,3), shape_txt)) +
-    scale_color_manual(values = subtype_cols) + #scale_alpha_manual(values = c('t'=0,'f'=1)) +
+    geom_tiplab(aes(label = Biopsy), offset = age*0.01) +
+    theme_tree2() + 
+    xlim(0, age+age*0.10) + 
+    scale_color_manual(values = subtype_cols, na.value = "gray") + 
+    labs(x = "Age (years)", title = sprintf("Chronogram for %s", pt)) +
+    geom_vline(xintercept = tumor_mrca_age, linetype = 2, color = "red")
+  
+  #plot(pchro)
+  
+  ## Plot lineage-through-time
+  gltt <- tibble(time = lttchro$times, lineages = lttchro$ltt)
+  pltt <- ggplot(gltt, aes(x = time, y = log(lineages))) + 
+    geom_step() + 
+    theme_minimal() +
+    xlim(0, age+age*0.10) +
+    labs(x = "Age (years)", y = "log(Lineages)", title = sprintf("Lineage-through-time plot for %s", pt)) +
+    geom_vline(xintercept = tumor_mrca_age, linetype = 2, color = "red") +
+    annotate("text", label = sprintf("y = %s\np = %s", round(pybus_harvey_gamma,2), scientific(pybus_harvey_p, digits = 2)), x = age * 0.80, y = max(log(gltt$lineages)) * 0.15)
+  
+  #plot(pltt)
+  
+  ## Extract tip order from tree object
+  #tip_order <- tre$edge[tre$edge[,2] <= length(tre$tip.label), 2]
+  df <- fortify(gtre)
+  df <- subset(df, isTip)
+  tip_order <- with(df, label[order(y, decreasing=T)])
+  
+  ## Re-order meta subset based on tip order
+  smeta <- smeta[match(tip_order, smeta$label),]
+  smeta <- smeta %>% mutate(Biopsy = factor(Biopsy, levels = rev(unique(Biopsy))))
+  
+  ## Plot Jaccard distance matrix
+  tmp <- dist.nodes(tre)[1:length(tre$tip.label),1:length(tre$tip.label)]
+  rownames(tmp) <- tre$tip.label
+  colnames(tmp) <- tre$tip.label
+  gdmat <- tmp %>% #as.matrix(d) %>% 
+    as.data.frame() %>% 
+    rownames_to_column('x') %>% 
+    gather(key = "y", value = "v", -x)
+  gdmat$x <- smeta$Biopsy[match(gdmat$x, smeta$label)]
+  gdmat$y <- smeta$Biopsy[match(gdmat$y, smeta$label)]
+  gdmat$x <- factor(gdmat$x, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
+  gdmat$y <- factor(gdmat$y, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
+  
+  pdistj <- ggplot(gdmat, aes(x,y, fill = v)) +
+    geom_tile(color = "white")+
+    theme_minimal() + 
+    scale_fill_distiller(palette = "Blues", direction = -1, na.value = "white") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1))+
+    coord_fixed() +
+    labs(x = "Biopsy")
+  
+  ## Plot spatial distance matrix
+  sdistm <- as.matrix(smeta[,c("X","Y","Z")])
+  rownames(sdistm) <- smeta$Biopsy
+  sdist <- dist(sdistm)
+  gsdist <- as.matrix(sdist) %>% 
+    as.data.frame() %>% 
+    rownames_to_column('x') %>% 
+    gather(key = "y", value = "v", -x)
+  gsdist$x <- factor(gsdist$x, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
+  gsdist$y <- factor(gsdist$y, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
+  
+  pdists <- ggplot(gsdist, aes(x,y, fill = v)) +
+    geom_tile(color = "white")+
+    theme_minimal() + 
+    scale_fill_distiller(palette = "Greens", direction = -1, na.value = "white") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1))+
+    coord_fixed() +
+    labs(x = "Biopsy")
+  
+  ## Compute correlation spatial distance to Jaccard distance
+  gdmat <- gdmat %>% arrange(x,y)
+  gsdist <- gsdist %>% arrange(x,y)
+  
+  distcor <- cor.test(gsdist$v, gdmat$v, method = "p")
+  
+  ## Build tibble with summary of results
+  res <- data.frame(patient = pt, age, 
+                tumor_mrca_age, root_node, sampled_root_node, tumor_clade_node, root_tumor_dist, tree_size, tumor_clade_size, tumor_max_internal_branch_length, tumor_max_tip_length,
+                tumor_tip_interal_branch_coef, root_tumor_clade_coef,
+                colless_stat, colless_p, sackin_stat, sackin_p,
+                kendall_moran_speciation_rate, magallon_sanderson_diversication_rate,
+                pybus_harvey_gamma, pybus_harvey_p,
+                retention_index, consistency_index,
+                distcor = as.numeric(distcor$estimate), distcorp = distcor$p.value)
+  
+  ## Align plots
+  
+  #gbuil2      <-  ggplot_build(ptre)       # get ggplot_built
+  #gtgbuild    <-  ggplot_gtable(gbuil2)         # get gtable from ggplot_built
+  #gtgbuild$layout$clip[gtgbuild$layout$name == "panel"] <- "off"                # modify gtable
+  #ggtreeOf8   <- as_ggplot(gtgbuild)            # back to ggplot
+  #gtgbuildgg2 <- ggtreeOf8 +  theme(plot.margin = unit(c(1,9.5,3,1.5), "cm") ) # top right bottom left - modify margins
+  
+  
+  #plot(cbind(gtgbuildgg2, p2))
+  
+  #library(gtable)
+  #p1 <- ggplotGrob(ptre)
+  #p2 <- ggplotGrob(pdistj)
+  #p3 <- ggplotGrob(pdists)
+  #g <- cbind(p1,p2,p3, size = "first")
+  #plot(g)
+  
+  #gtable_show_layout(p2)
+  
+  ## Plot imaging
+  gimg <- smeta %>% 
+    select(Biopsy, Patient, T01, T02, FLR, T1G) %>%
+    gather(key = "variable", value="value", -Biopsy, -Patient) %>%
+    mutate(Biopsy = factor(Biopsy, levels = unique(smeta$Biopsy), ordered = TRUE),
+           value = factor(value, levels = c(0,0.5,1), labels = c("-/-", "-/+", "+/+")),
+           variable = factor(variable, levels = c("T01", "T02", "T1G", "FLR"))) %>%
+    filter(variable %in% c("T1G","FLR"))
+  
+  pimg <- ggplot() + 
+    geom_tile(data = gimg, aes(x = forcats::fct_rev(Biopsy), y = variable, fill = value), color = "black") +
+    labs(y = "", x = "", fill = "Imaging") +
+    scale_fill_manual(values = c("white", rgb(255,0,255,50, maxColorValue = 255), rgb(255,0,255, maxColorValue = 255))) +
+    coord_flip() +
+    theme_minimal()
+  
+  ## Plot distances
+  gdist <- smeta %>% select(Biopsy, Patient, Dist_to_CE_surface, Dist_to_nCE_surface) %>%
+    gather(key = "m", value = "distance", -Biopsy, -Patient) %>%
+    mutate(Biopsy = factor(Biopsy, levels = rev(unique(smeta$Biopsy)), ordered = TRUE))
+  pdist <- ggplot(gdist) + 
+    geom_col(aes(x = Biopsy, y = distance, fill = m), color = "black", position = "dodge", width = 0.8) + # color = "black", size = 0.25, 
+    geom_hline(yintercept = 0, linetype = 2) +
+    labs(y = "Distance to Tumor\nSurface (in mm)", fill = "Location") +
+    scale_fill_manual(values = c("magenta", "gold")) +
+    scale_y_continuous(breaks = seq(-20,30,10)) +
+    coord_flip(ylim = c(-20,30)) +
+    theme_minimal() + 
     theme(legend.position='none')
   
-  # tre2 <- treeio::drop.tip(tre, "ROOT", root.edge = 1)
+  ## Plot cellularity
+  pcell <- ggplot(smeta) + 
+    geom_col(aes(x = Biopsy, y = HE), fill = "pink", size = 0.25, color = "black") +
+    labs(y = "Cellularity\ncells/mm2") +
+    coord_flip() + 
+    theme_minimal()
   
-  ## View tumor clade only
-  ## viewClade(p, MRCA(tre,na.omit(tumor_samples)))
+  ## Plot MIB1
+  pmib = ggplot(smeta) + 
+    geom_col(aes(x = Biopsy, y = MIB), fill = "#800080", size = 0.25, color = "black") +
+    labs(y = "%-MIB1\npositive cells") +
+    coord_flip(ylim = c(0, 100)) + 
+    theme_minimal()
   
-  ## Some useful docs on clade annotation here
-  ## http://bioconductor.jp/packages/3.1/bioc/vignettes/ggtree/inst/doc/ggtree.html
-    
-  p <- p + geom_hilight(node = tumor_clade_node, fill = "black", alpha = 0.2) + 
-    geom_cladelabel(node = tumor_clade_node, label = "Tumor", angle = 270, hjust = 0.5) +
-    geom_nodepoint(aes(shape = ifelse(node == tumor_clade_node, 't', 'f')), size = 3, color = "red") + 
-    scale_shape_manual(values = c('t'=8,'f'=NA))
-      
-  #p$data$y[which(p$data$branch.length==0)[1]] <- p$data$y[which(p$data$branch.length==0)[2]]
+  ## Plot purity
+  ppur = ggplot() + #geom_hline(yintercept=0.5, linetype = 2) +
+    geom_line(data = smeta, aes(x=Biopsy, y=PAMES, group = Patient), color = "#999999", linetype = 2) +
+    geom_point(data = smeta, aes(x=Biopsy, y=PAMES, color = "orangered")) + #geom_point(data = smeta, aes(x=Biopsy, y=PAMES, color = ifelse(sample_no %% 2 == 1, "coral", "orangered"))) + #geom_text(data = smeta, aes(x=Biopsy, y = ifelse(sample_no %% 2 == 1, purity + 0.1, purity - 0.1), color = ifelse(sample_no %% 2 == 1, "coral", "orangered"), label = sample_no), size = 10/(15/4)) +
+    labs(y = "PAMES", fill = "Purity group") +
+    guides(color = FALSE) +
+    scale_color_manual(values = c("coral", "orangered")) +
+    scale_y_continuous(breaks = c(0.25,0.50,0.75,1.0)) +
+    coord_flip(ylim = c(0.25,1)) + 
+    theme_minimal()
   
-  plot(p)
-  return(p)
+  #g1 <- ggplotGrob(ptre)
+  #g2 <- ggplotGrob(pdistj + guides(fill = FALSE))
+  #g3 <- ggplotGrob(pdists + guides(fill = FALSE))
+  #g4 <- ggplotGrob(ppur)
+  #g5 <- ggplotGrob(pdist)
+  #g6 <- ggplotGrob(pcell)
+  #g7 <- ggplotGrob(pmib)
+  
+  null_x <- theme(axis.title.y=element_blank(),
+                 axis.text.y=element_blank(),
+                 axis.ticks.y=element_blank()) 
+  
+  ## For alignment using gtable see
+  ## https://github.com/YuLab-SMU/ggtree/issues/313
+  
+  p1 <- ptre
+  p2 <- pdistj + null_x + guides(fill = FALSE)
+  p3 <- pdists + null_x + guides(fill = FALSE)
+  p4 <- ppur + null_x
+  p5 <- pdist + null_x + guides(fill = FALSE)
+  p6 <- pcell + null_x
+  p7 <- pmib + null_x
+  
+  combplot <- egg::ggarrange(p1, p2, p3, p4, p5, p6, p7, ncol = 7, top = "foo", widths = c(rep(1,3),rep(0.5,4)))
+  
+  pdf(file = sprintf("figures/phylo/%s.pdf",pt), height = 6, width = 24)
+  plot(combplot)
+  dev.off()
+  
+  out <- list(res = res, ptre = ptre, ptre_full = ptre_full, pchro = pchro, pltt = pltt, ltt = lttchro, pmib = pmib, pcell = pcell, pdist = pdist, pimg = pimg, ppur = ppur)
+  
+  return(out)
 })
+names(frontier_phy) <- pts
 
 cowplot::plot_grid(plotlist = plotlist[1:9], ncol = 3)
 cowplot::plot_grid(plotlist = plotlist[10:18], ncol = 3)
 cowplot::plot_grid(plotlist = plotlist[19:27], ncol = 3)
 
+## Define subtypes
+mut_noncodel <- c("Toronto-01", "UCSF-01", "UCSF-04","UCSF-17", "UCSF-18", "UCSF-90", "VUmc-01", "VUmc-03", "VUmc-04", "VUmc-06", "VUmc-09", "Vumc-10", "Vumc-12", "Vumc-15") # mut-codel
+wt <- c("Toronto-02", "Toronto-03", "Toronto-04", "Toronto-05", "VUmc-02", "VUmc-07", "VUmc-08", "Vumc-11", "Vumc-13", "Vumc-14", "Vumc-17")
+mut_codel <- c("UCSF-49", "VUmc-05")
+
+res <- purrr::map(frontier_phy, "res") %>% 
+  bind_rows() %>% 
+  mutate(idh_codel_subtype = case_when(patient %in% mut_noncodel ~ "IDHmut-noncodel",
+                                       patient %in% mut_codel ~ "IDHmut-codel",
+                                       patient %in% wt ~ "IDHwt",
+                                       TRUE ~ NA_character_)) %>%
+  left_join(select(meta, patient = Patient, Dataset) %>% distinct())
+
+ggplot(res, aes(x=age, color = idh_codel_subtype)) + geom_density()
+
+## Plot correlation
+ggplot(res, aes(x = patient, y = distcor)) + geom_col()
+ggplot(res, aes(x = patient, y = distcorp)) + geom_col()
+
+## Plot Colless' P-value
+ggplot(res, aes(x = patient, y = -log10(colless_p), fill = idh_codel_subtype)) + 
+  geom_col() +
+  geom_hline(yintercept = -log10(0.05), col = "red", linetype = 2) + 
+  labs(x = "Patient", y = "-log10(P-value)", fill = "IDH-codel subtype") +
+  coord_flip() +
+  theme_minimal()
+
+## Plot Pybus-Harvey P-values
+ggplot(res, aes(x = patient, y = -log10(pybus_harvey_p), fill = idh_codel_subtype)) + geom_col() + geom_hline(yintercept = -log10(0.05), col = "red", linetype = 2) + coord_flip()
+
+## Scatter plot of P-values and Gamma statistic
+ggplot(res, aes(x = pybus_harvey_gamma, y = -log10(pybus_harvey_p), color = idh_codel_subtype, shape = Dataset)) + 
+  geom_point() + 
+  geom_hline(yintercept = -log10(0.05), col = "red", linetype = 2) +
+  geom_text_repel(aes(label = patient, alpha = pybus_harvey_p < 0.05, hjust = pybus_harvey_gamma > 0), nudge_x = 0.5) +
+  guides(alpha = FALSE) +
+  labs(x = "Pybus-Harvey gamma (y) statistic", y = "-log10(P-value)", color = "IDH-codel subtype") +
+  theme_minimal()
+
+## Plot Age and Tumor Age
+ggplot(res, aes(x = patient)) + 
+  geom_linerange(aes(ymin = tumor_mrca_age, ymax = age)) +
+  geom_point(aes(y = tumor_mrca_age), color = "blue") +
+  geom_point(aes(y = age), color = "red") +
+  labs(y = "Tumor origin (blue) - Tumor detection (red)", x = "Patient") +
+  coord_flip() +
+  theme_minimal()
+
+res2 <- res %>% filter(Dataset != "Toronto")
+ggplot(res2, aes(x = age - tumor_mrca_age, color = idh_codel_subtype)) + geom_density()
+
+
 # the 41k probes heterogeneous in cortex controls, are they heterozygous in tumors?
-
 m_probedat_hetero_control <- subset(m_probedat, m_probedat$probe %in% hetero_cortex_probeids)
-
-## --------------------------------------------------------------------------------------------------------
-## Step ?. Phylo trees annotated by sample localization on MRI
-##   - VUmc data only
-## --------------------------------------------------------------------------------------------------------
-
-
-vumcplots <-lapply (unique(meta$Patient)[grep("vumc", unique(meta$Patient), ignore.case = TRUE)], function(pt) {
-  message(pt)
-  
-  phylo_accesssions <- meta$Sentrix_Accession[meta$Patient == pt]
-  
-  if (determine_all) {
-    with_root <- TRUE
-    m1 <- t(binarized_ms[, phylo_accesssions])
-    m2 <- t(binarized_dkfz_cortex[,1,drop=F])
-    #m2[1,hetero_cortex_probeids] = NA
-    rownames(m2) <- 'ROOT'
-    m = rbind(m1, m2)
-  } else if (determine_heterog) {
-    with_root <- FALSE
-    m <- t(binarized_ms_heterog_cortex[, phylo_accesssions])
-  } else if(with_root)
-    m <- t(binarized_ms_homog_cortex[, c(phylo_accesssions, 'ROOT')])
-  else
-    m <- t(binarized_ms_homog_cortex[, phylo_accesssions])
-  
-  d <- dist(m, method = "binary")
-  tre <- bionj(d)
-  
-  if(with_root)
-    tre <- root(tre, outgroup = 'ROOT', resolve.root = TRUE)
-  
-  smeta <- meta[meta$Patient == pt,] %>% 
-    arrange(PAMES) %>% 
-    mutate(N=1:n())
-  
-  if(with_root)
-    smeta <- rbind(smeta, c("ROOT", rep(NA, ncol(smeta)-1)))
-  
-  rownames(smeta) <- smeta$Sentrix_Accession
-  smeta <- smeta %>% 
-    dplyr::rename(label = Sentrix_Accession) %>% 
-    mutate(label = factor(label),
-           Dist_to_nCE_surface = as.numeric(Dist_to_nCE_surface),
-           Dist_to_CE_surface = as.numeric(Dist_to_CE_surface)) %>%
-    mutate(Dist_to_nCE_surface = ifelse(is.na(Dist_to_nCE_surface), 0, Dist_to_nCE_surface),
-           Dist_to_CE_surface = ifelse(is.na(Dist_to_CE_surface), 0, Dist_to_CE_surface))
-  
-  tib <- tre %>% as_tibble()
-  
-  tre <- as_tibble(tre) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
-  
-  rootedge <- tib$branch.length[which(tib$label == 'ROOT')]
-  
-  gg_tre <- ggtree(tre, aes(alpha = ifelse(label=='ROOT', 't','f'))) + 
-    geom_tippoint(aes(color = Subtype), size = 3 ) +
-    geom_tiplab(aes(label = N), align=TRUE, offset = max(d)*0.02) +
-    geom_rootedge(rootedge = rootedge) +
-    xlim(-rootedge,max(d))+
-    scale_color_manual(values = subtype_cols) +
-    scale_alpha_manual(values = c('t'=0,'f'=1)) +
-    theme(legend.position='none')
-  
-  gg_tre$data$y[which(gg_tre$data$branch.length==0)[1]] <- gg_tre$data$y[which(gg_tre$data$branch.length==0)[2]]
-  
-  gg_dist1 <- ggtreeplot(gg_tre, smeta, flip=TRUE) + 
-    geom_col(aes(y = Dist_to_nCE_surface), fill = "gold") +
-    coord_flip() +
-    theme_minimal() +
-    labs(y = "Dist to nCE surface (mm)") +
-    theme(legend.position='none') + no_y_axis() +
-    scale_alpha_manual(values = c('n'=0,'y'=1))
-  
-  gg_dist2 <- ggtreeplot(gg_tre, smeta, flip=TRUE) + 
-    geom_col(aes(y = Dist_to_CE_surface), fill = "magenta") +
-    coord_flip() +
-    theme_minimal() +
-    labs(y = "Dist to CE surface (mm)") +
-    theme(legend.position='none') + no_y_axis() +
-    scale_alpha_manual(values = c('n'=0,'y'=1))
-  
-  patch <- gg_dist1 + gg_dist2
-  p <- gg_tre + patch + plot_annotation(title = sprintf("Phylogenetic tree for %s\nTree constructed using improved NJ over a binary distance matrix\nTree is annotated for spatial location relative to tumor volumes ", pt))
-  return(p)
-})
 
 ## --------------------------------------------------------------------------------------------------------
 ## Step ?. CNV distances
