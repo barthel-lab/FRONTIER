@@ -3,7 +3,7 @@
 % as a table named VUmc
 
 if ~exist('VUmc')
-    tablefile = '/Users/anderk/Documents/FRONTIER/Metadata/Sample_Sheet_VUmc_Location_Stats.xls';
+    tablefile = '../sandbox/Sample_Sheet_VUmc_Location_Stats.xls';
     VUmc = readtable(tablefile);
 end
 
@@ -111,7 +111,7 @@ set(get(gca,'YLabel'),'string','Y (mm)')
 set(get(gca,'ZLabel'),'string','Z (mm)')
 
 % Nii file directory
-filedir = '/Users/anderk/Documents/FRONTIER/VUmc Patient MRI Coords/Nii_Files';
+filedir = '../data/nii';
 
 % Plot tumor volume(s) on same figure
 % T1G volumes are yellow, FLR volumes are magenta'
@@ -185,6 +185,13 @@ else
     patient = ['Patient',' ',p.Patient{1}];
     set(get(gca,'title'),'string',patient)
 end
+
+%% Add brain overlay
+hold on
+brain_overlay = extractCoords('../data/nii/P17_brain.mask.nii.gz')
+brain_overlay.FaceColor = 'black';
+brain_overlay.EdgeColor = 'none';
+brain_overlay.FaceAlpha = 0.08;
 
 
 % Render mp4 video of rotating 3D figure, if desired
