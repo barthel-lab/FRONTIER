@@ -12,3 +12,4 @@ R/sandbox/**
 *.Rda
 *.RDa
 .Rproj.user
+blogdown/**

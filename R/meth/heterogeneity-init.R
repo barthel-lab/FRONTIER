@@ -62,6 +62,9 @@ theme_pie <- theme_classic() +
 col_pie <- labs(x = NULL, y = NULL, fill = NULL) + 
   scale_fill_manual(values = cols1)
 
+## Fix Vumc-10 issue
+meta$Biopsy[meta$Sentrix_Accession =='202242420061_R05C01'] <- 'S7'
+
 ## Count probes per gene and region
 # genemap <- probemap %>% 
 #   group_by(gene,location) %>% 
@@ -97,6 +100,27 @@ binarized_dkfz_cortex <- binarized[,colnames(binarized) %in% control_meta$Sentri
 hypo_probes_dkfz_cortex  = apply(binarized_dkfz_cortex, 1, function(x) all(x==0))
 hyper_probes_dkfz_cortex = apply(binarized_dkfz_cortex, 1, function(x) all(x==1))
 hyper_hypo_probes_dkfz_cortex = apply(binarized_dkfz_cortex, 1, function(x) all(x==1) || all(x==0))
+
+## Define probes
+
+## Select promoter probes
+promoter_probes <- probemap$probe[which(probemap$location == "promoter")]
+
+homog_cortex_probeids  = rownames(binarized_dkfz_cortex)[hyper_hypo_probes_dkfz_cortex] #, promoter_probes)
+hetero_cortex_probeids = rownames(binarized_dkfz_cortex)[!hyper_hypo_probes_dkfz_cortex]
+
+# Subset homogeneous probes in normals to use as "root"
+homog_root = binarized_dkfz_cortex[homog_cortex_probeids, 1, drop=F]
+colnames(homog_root) <- 'ROOT'
+
+# Subset tumor samples in multi-sector cohort using homogeneous probes in normals
+binarized_ms_homog_cortex = binarized_ms[homog_cortex_probeids,]
+
+# Append root
+binarized_ms_homog_cortex = cbind(binarized_ms_homog_cortex, homog_root)
+
+# Subset tumor samples in multi-sector cohort using probes heterogeneous in normals
+binarized_ms_heterog_cortex = binarized_ms[hetero_cortex_probeids,]
 
 ## Add Patient IDs
 meta <- meta %>% arrange(PAMES) %>% group_by(Patient) %>% mutate(PatientN = 1:n()) %>% ungroup()

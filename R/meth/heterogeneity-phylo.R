@@ -6,9 +6,6 @@
 ## Author: Floris Barthel
 ##################################################
 
-options(rgl.useNULL = TRUE)
-options(rgl.printRglwidget = TRUE)
-
 source("R/meth/heterogeneity-init.R")
 source("R/meth/heterogeneity-func.R")
 
@@ -17,36 +14,18 @@ library(geiger)
 library(phangorn)
 library(phytools)
 library(ggrepel)
-library(rgl)
-library(magick) ## Requires LD_LIBRARY_PATH is correctly set
+library(egg)
 
 ## --------------------------------------------------------------------------------------------------------
 ##
 ## --------------------------------------------------------------------------------------------------------
 
-## Define probes
+## Integrate anatomical distances
+anatdist <- read.csv('sandbox/FRONTIER.distances.csv', as.is = TRUE)
+meta <- meta %>% left_join(anatdist)
 
-## Select promoter probes
-promoter_probes <- probemap$probe[which(probemap$location == "promoter")]
-
-homog_cortex_probeids  = rownames(binarized_dkfz_cortex)[hyper_hypo_probes_dkfz_cortex] #, promoter_probes)
-hetero_cortex_probeids = rownames(binarized_dkfz_cortex)[!hyper_hypo_probes_dkfz_cortex]
-
-# Subset homogeneous probes in normals to use as "root"
-homog_root = binarized_dkfz_cortex[homog_cortex_probeids, 1, drop=F]
-colnames(homog_root) <- 'ROOT'
-
-# Subset tumor samples in multi-sector cohort using homogeneous probes in normals
-binarized_ms_homog_cortex = binarized_ms[homog_cortex_probeids,]
-
-# Append root
-binarized_ms_homog_cortex = cbind(binarized_ms_homog_cortex, homog_root)
-
-# Subset tumor samples in multi-sector cohort using probes heterogeneous in normals
-binarized_ms_heterog_cortex = binarized_ms[hetero_cortex_probeids,]
-
-pts <- sort(unique(meta$Patient)) #unique(meta$Patient)
-#pts <- "VUmc-04"
+## Patients (subset VUmc)
+pts <- sort(unique(meta$Patient[meta$Dataset=="VUmc"])) #unique(meta$Patient) #pts <- "VUmc-04"
 pt <- "VUmc-04"
 
 frontier_phy <- lapply (pts, function(pt) {
@@ -82,9 +61,6 @@ frontier_phy <- lapply (pts, function(pt) {
   tre <- reroot(tre, which(tre$tip.label=="ROOT")) #MRCA(tre, "ROOT"))
   #tre <- root(tre, outgroup = 'ROOT', resolve.root = TRUE)
   
-  ## Set root as length of ROOT node
-  #tre$root.edge <- tre$edge.length[tre$tip.label=="ROOT"]
-  
   ## Retreive metadata
   smeta <- meta[meta$Patient == pt,] %>% 
     arrange(PAMES) %>% 
@@ -107,6 +83,8 @@ frontier_phy <- lapply (pts, function(pt) {
   root_node <- MRCA(tre,rownames(m))
   ## Identify most recent common ancestor of all tumor samples
   tumor_clade_node <- MRCA(tre,na.omit(tumor_samples))
+  if(is.null(tumor_clade_node))
+    tumor_clade_node = which(tre$tip.label == na.omit(tumor_samples))
   ## Identify root tip
   ## This "outgroup" signifies a the methylation profile of an unsampled normal cell population
   root_tip_node <- which(tre$tip.label == "ROOT")
@@ -121,27 +99,27 @@ frontier_phy <- lapply (pts, function(pt) {
     age <- 65
   }
   
-  calib <- rbind(makeChronosCalib(tre, node = sampled_root_node, age.min = 0, age.max = age),
-                 makeChronosCalib(tre, node = root_node, age.min = age, age.max = age))
-  
-  ## Fit chronogram
-  capture.output({
-    chro <- chronos(tre, model = "discrete", calibration = calib, control = chronos.control(nb.rate.cat = 2))
-    class(chro) <- "phylo" ## fixes issues with ggtree not being able to plot "chrono" type objects
-  })
-  
-  ## Time the MRCA for the tumor
-  tumor_mrca_age <- dist.nodes(chro)[tumor_clade_node,root_node]
-  
-  kendall_moran_speciation_rate <- bd.km(chro)
-  magallon_sanderson_diversication_rate <- bd.ms(chro)
-  
-  ## Perform a lineage-through-time analysis and compute Pybus & Harvey's gamma statistic
-  capture.output({
-    lttchro <- ltt(chro)
-    pybus_harvey_gamma <- lttchro$gamma
-    pybus_harvey_p <- lttchro$p
-  })
+  # calib <- rbind(makeChronosCalib(tre, node = sampled_root_node, age.min = 0, age.max = age),
+  #                makeChronosCalib(tre, node = root_node, age.min = age, age.max = age))
+  # 
+  # ## Fit chronogram
+  # capture.output({
+  #   chro <- chronos(tre, model = "discrete", calibration = calib, control = chronos.control(nb.rate.cat = 2))
+  #   class(chro) <- "phylo" ## fixes issues with ggtree not being able to plot "chrono" type objects
+  # })
+  # 
+  # ## Time the MRCA for the tumor
+  # tumor_mrca_age <- dist.nodes(chro)[tumor_clade_node,root_node]
+  # 
+  # kendall_moran_speciation_rate <- bd.km(chro)
+  # magallon_sanderson_diversication_rate <- bd.ms(chro)
+  # 
+  # ## Perform a lineage-through-time analysis and compute Pybus & Harvey's gamma statistic
+  # capture.output({
+  #   lttchro <- ltt(chro)
+  #   pybus_harvey_gamma <- lttchro$gamma
+  #   pybus_harvey_p <- lttchro$p
+  # })
   
   ## Compute Consistency and Retention indices
   ## See https://en.wikipedia.org/wiki/Cladogram#Consistency_index
@@ -189,6 +167,18 @@ frontier_phy <- lapply (pts, function(pt) {
   tumor_tip_interal_branch_coef <- tumor_max_tip_length / tumor_max_internal_branch_length
   root_tumor_clade_coef <- root_tumor_dist / tumor_clade_size
   
+  ## Compute distance from each tip to the root
+  root_tip_dist <- dist.nodes(tre)[root_tip_node,1:length(tre$tip.label)]
+  names(root_tip_dist) <- tre$tip.label
+  
+  ## Add root-tip dist to meta
+  smeta$RootTipDist <- unname(root_tip_dist[match(smeta$label, names(root_tip_dist))])
+  
+  ## Calculate correlation between root-tip distance
+  ## and brain surface distance
+  brainrootipcor <- cor.test(smeta$RootTipDist, smeta$BrainDistance, method = "s")
+  pbrainroottip <- sprintf("rho = %s, p = %s", round(brainrootipcor$estimate,2), scientific(brainrootipcor$p.value, digits = 2))
+  
   ## Here's a great start on some metrics to analyze tree shape
   ## https://biology.stackexchange.com/questions/42278/what-are-some-useful-starter-metrics-to-use-on-phylogenetic-trees
   
@@ -223,26 +213,26 @@ frontier_phy <- lapply (pts, function(pt) {
   }
   
   ## Build spatial tree (ROOT pruned)
-  trespat <- drop.tip(tre, 'ROOT')
-  trespat$tip.label <- smeta$Biopsy[match(trespat$tip.label,smeta$label)]
+  #trespat <- drop.tip(tre, 'ROOT')
+  #trespat$tip.label <- smeta$Biopsy[match(trespat$tip.label,smeta$label)]
   
   ## Plot phylogeny in 3D phylomorphospace
-  mspat3d <- as.matrix(smeta[-which(smeta$label=="ROOT"),c('X','Y','Z')])
-  rownames(mspat3d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
-  pmorph3d <- phylomorphospace3d(trespat, mspat3d, method = "dynamic")
-  phylomorphospace3d(trespat, mspat3d, method = "static")
-  
-  movie3d(pmorph3d,movie="phylomorph-3d",duration=10)
-  
-  #phylomorphospace3d(trespat, mspat, method = "dynamic", control = list(spin = TRUE, axes = TRUE))
-  
-  ## Plot in 2d phylospace
-  u = x / z;
-  v = y / z;
-  
-  mspat2d <- smeta[-which(smeta$label=="ROOT"), c('X','Y')]/smeta[1:nrow(smeta)-1,c('Z')]
-  rownames(mspat2d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
-  pmorph2d <- phylomorphospace(trespat, mspat2d, method = "dynamic")
+  # mspat3d <- as.matrix(smeta[-which(smeta$label=="ROOT"),c('X','Y','Z')])
+  # rownames(mspat3d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
+  # pmorph3d <- phylomorphospace3d(trespat, mspat3d, method = "dynamic")
+  # phylomorphospace3d(trespat, mspat3d, method = "static")
+  # 
+  # movie3d(pmorph3d,movie="phylomorph-3d",duration=10)
+  # 
+  # #phylomorphospace3d(trespat, mspat, method = "dynamic", control = list(spin = TRUE, axes = TRUE))
+  # 
+  # ## Plot in 2d phylospace
+  # u = x / z;
+  # v = y / z;
+  # 
+  # mspat2d <- smeta[-which(smeta$label=="ROOT"), c('X','Y')]/smeta[1:nrow(smeta)-1,c('Z')]
+  # rownames(mspat2d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
+  # pmorph2d <- phylomorphospace(trespat, mspat2d, method = "dynamic")
   
   ## Plot phylogenetic tree
   gtre <- as_tibble(tre) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
@@ -251,7 +241,7 @@ frontier_phy <- lapply (pts, function(pt) {
   ptre <- ggtree(gtre) +
     geom_tippoint(aes(color = Subtype), size = 3 ) +
     guides(color = FALSE) +
-    geom_tiplab(aes(label = Biopsy), offset = maxdist * 0.01, align = TRUE) +
+    geom_tiplab(aes(label = Biopsy), offset = maxdist * 0.01, align = TRUE, size = 5) +
     xlim(0, maxdist+maxdist*0.10) + 
     scale_color_manual(values = subtype_cols, na.value = "gray")
     
@@ -267,29 +257,29 @@ frontier_phy <- lapply (pts, function(pt) {
   #plot(ptre)
   
   ## Plot chronogram
-  gchro <- as_tibble(chro) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
-  pchro <- ggtree(gchro) + 
-    geom_tippoint(aes(color = Subtype), size = 3 ) + #geom_nodelab(aes(x=branch, label=round(edge.length, 2)), vjust=-.5, size=3) +
-    geom_tiplab(aes(label = Biopsy), offset = age*0.01) +
-    theme_tree2() + 
-    xlim(0, age+age*0.10) + 
-    scale_color_manual(values = subtype_cols, na.value = "gray") + 
-    labs(x = "Age (years)", title = sprintf("Chronogram for %s", pt)) +
-    geom_vline(xintercept = tumor_mrca_age, linetype = 2, color = "red")
-  
-  #plot(pchro)
-  
-  ## Plot lineage-through-time
-  gltt <- tibble(time = lttchro$times, lineages = lttchro$ltt)
-  pltt <- ggplot(gltt, aes(x = time, y = log(lineages))) + 
-    geom_step() + 
-    theme_minimal() +
-    xlim(0, age+age*0.10) +
-    labs(x = "Age (years)", y = "log(Lineages)", title = sprintf("Lineage-through-time plot for %s", pt)) +
-    geom_vline(xintercept = tumor_mrca_age, linetype = 2, color = "red") +
-    annotate("text", label = sprintf("y = %s\np = %s", round(pybus_harvey_gamma,2), scientific(pybus_harvey_p, digits = 2)), x = age * 0.80, y = max(log(gltt$lineages)) * 0.15)
-  
-  #plot(pltt)
+  # gchro <- as_tibble(chro) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
+  # pchro <- ggtree(gchro) + 
+  #   geom_tippoint(aes(color = Subtype), size = 3 ) + #geom_nodelab(aes(x=branch, label=round(edge.length, 2)), vjust=-.5, size=3) +
+  #   geom_tiplab(aes(label = Biopsy), offset = age*0.01) +
+  #   theme_tree2() + 
+  #   xlim(0, age+age*0.10) + 
+  #   scale_color_manual(values = subtype_cols, na.value = "gray") + 
+  #   labs(x = "Age (years)", title = sprintf("Chronogram for %s", pt)) +
+  #   geom_vline(xintercept = tumor_mrca_age, linetype = 2, color = "red")
+  # 
+  # #plot(pchro)
+  # 
+  # ## Plot lineage-through-time
+  # gltt <- tibble(time = lttchro$times, lineages = lttchro$ltt)
+  # pltt <- ggplot(gltt, aes(x = time, y = log(lineages))) + 
+  #   geom_step() + 
+  #   theme_minimal(base_size = 25) +
+  #   xlim(0, age+age*0.10) +
+  #   labs(x = "Age (years)", y = "log(Lineages)", title = sprintf("Lineage-through-time plot for %s", pt)) +
+  #   geom_vline(xintercept = tumor_mrca_age, linetype = 2, color = "red") +
+  #   annotate("text", label = sprintf("y = %s\np = %s", round(pybus_harvey_gamma,2), scientific(pybus_harvey_p, digits = 2)), x = age * 0.80, y = max(log(gltt$lineages)) * 0.15)
+  # 
+  # #plot(pltt)
   
   ## Extract tip order from tree object
   #tip_order <- tre$edge[tre$edge[,2] <= length(tre$tip.label), 2]
@@ -301,81 +291,73 @@ frontier_phy <- lapply (pts, function(pt) {
   smeta <- smeta[match(tip_order, smeta$label),]
   smeta <- smeta %>% mutate(Biopsy = factor(Biopsy, levels = rev(unique(Biopsy))))
   
-  ## Plot Jaccard distance matrix
-  tmp <- dist.nodes(tre)[1:length(tre$tip.label),1:length(tre$tip.label)]
-  rownames(tmp) <- tre$tip.label
-  colnames(tmp) <- tre$tip.label
-  gdmat <- tmp %>% #as.matrix(d) %>% 
+  ## Plot Genomic distance matrix
+  gdistm <- dist.nodes(tre)[1:length(tre$tip.label),1:length(tre$tip.label)]
+  rownames(gdistm) <- smeta$Biopsy[match(tre$tip.label, smeta$label)] #tre$tip.label 
+  colnames(gdistm) <- smeta$Biopsy[match(tre$tip.label, smeta$label)] #tre$tip.label
+  
+  gdmat <- gdistm %>% #as.matrix(d) %>% 
     as.data.frame() %>% 
     rownames_to_column('x') %>% 
     gather(key = "y", value = "v", -x)
-  gdmat$x <- smeta$Biopsy[match(gdmat$x, smeta$label)]
-  gdmat$y <- smeta$Biopsy[match(gdmat$y, smeta$label)]
+  #gdmat$x <- smeta$Biopsy[match(gdmat$x, smeta$label)]
+  #gdmat$y <- smeta$Biopsy[match(gdmat$y, smeta$label)]
   gdmat$x <- factor(gdmat$x, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
   gdmat$y <- factor(gdmat$y, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
   
   pdistj <- ggplot(gdmat, aes(x,y, fill = v)) +
     geom_tile(color = "white")+
-    theme_minimal() + 
+    theme_minimal(base_size = 25) + 
     scale_fill_distiller(palette = "Blues", direction = -1, na.value = "white") +
     theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1))+
     coord_fixed() +
-    labs(x = "Biopsy")
+    labs(x = "Pairwise genomic distances\nby biopsy")
   
   ## Plot spatial distance matrix
-  sdistm <- as.matrix(smeta[,c("X","Y","Z")])
-  rownames(sdistm) <- smeta$Biopsy
-  sdist <- dist(sdistm)
-  gsdist <- as.matrix(sdist) %>% 
+  sdist <- as.matrix(smeta[,c("X","Y","Z")])
+  rownames(sdist) <- smeta$Biopsy
+  sdistm <- as.matrix(dist(sdist))
+  gsdist <- as.matrix(sdistm) %>% 
     as.data.frame() %>% 
     rownames_to_column('x') %>% 
     gather(key = "y", value = "v", -x)
   gsdist$x <- factor(gsdist$x, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
   gsdist$y <- factor(gsdist$y, levels = rev(unique(smeta$Biopsy)), ordered = TRUE)
   
+  ## Mantel test for correlating
+  bi <- levels(smeta$Biopsy)[-1]
+  distcor <- mantel.test(sdistm[bi,bi], gdistm[bi,bi], graph = FALSE, nperm = 10000)
+  
+  ## Spatial - genomic correlation mantel test string
+  pmantelstr <- sprintf("z = %s, p = %s", round(distcor$z.stat,2), scientific(distcor$p, digits = 2))
+  
   pdists <- ggplot(gsdist, aes(x,y, fill = v)) +
     geom_tile(color = "white")+
-    theme_minimal() + 
+    theme_minimal(base_size = 25) + 
     scale_fill_distiller(palette = "Greens", direction = -1, na.value = "white") +
     theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust = 1))+
     coord_fixed() +
-    labs(x = "Biopsy")
-  
-  ## Compute correlation spatial distance to Jaccard distance
-  gdmat <- gdmat %>% arrange(x,y)
-  gsdist <- gsdist %>% arrange(x,y)
-  
-  distcor <- cor.test(gsdist$v, gdmat$v, method = "p")
+    labs(x = "Pairwise spatial distances\nby biopsy") + 
+    annotate(geom="text", x=2, y=1, label=pmantelstr, color="black", hjust = 0, size = 5)
   
   ## Build tibble with summary of results
+  # res <- data.frame(patient = pt, age, 
+  #               tumor_mrca_age, root_node, sampled_root_node, tumor_clade_node, root_tumor_dist, tree_size, tumor_clade_size, tumor_max_internal_branch_length, tumor_max_tip_length,
+  #               tumor_tip_interal_branch_coef, root_tumor_clade_coef,
+  #               colless_stat, colless_p, sackin_stat, sackin_p,
+  #               kendall_moran_speciation_rate, magallon_sanderson_diversication_rate,
+  #               pybus_harvey_gamma, pybus_harvey_p,
+  #               retention_index, consistency_index,
+  #               distcor = as.numeric(distcor$z.stat), distcorp = distcor$p,
+  #               brainroottiprho = brainrootipcor$estimate, brainroottipp = brainrootipcor$p.value)
+  # 
   res <- data.frame(patient = pt, age, 
-                tumor_mrca_age, root_node, sampled_root_node, tumor_clade_node, root_tumor_dist, tree_size, tumor_clade_size, tumor_max_internal_branch_length, tumor_max_tip_length,
-                tumor_tip_interal_branch_coef, root_tumor_clade_coef,
-                colless_stat, colless_p, sackin_stat, sackin_p,
-                kendall_moran_speciation_rate, magallon_sanderson_diversication_rate,
-                pybus_harvey_gamma, pybus_harvey_p,
-                retention_index, consistency_index,
-                distcor = as.numeric(distcor$estimate), distcorp = distcor$p.value)
-  
-  ## Align plots
-  
-  #gbuil2      <-  ggplot_build(ptre)       # get ggplot_built
-  #gtgbuild    <-  ggplot_gtable(gbuil2)         # get gtable from ggplot_built
-  #gtgbuild$layout$clip[gtgbuild$layout$name == "panel"] <- "off"                # modify gtable
-  #ggtreeOf8   <- as_ggplot(gtgbuild)            # back to ggplot
-  #gtgbuildgg2 <- ggtreeOf8 +  theme(plot.margin = unit(c(1,9.5,3,1.5), "cm") ) # top right bottom left - modify margins
-  
-  
-  #plot(cbind(gtgbuildgg2, p2))
-  
-  #library(gtable)
-  #p1 <- ggplotGrob(ptre)
-  #p2 <- ggplotGrob(pdistj)
-  #p3 <- ggplotGrob(pdists)
-  #g <- cbind(p1,p2,p3, size = "first")
-  #plot(g)
-  
-  #gtable_show_layout(p2)
+                    root_node, sampled_root_node, tumor_clade_node, root_tumor_dist, tree_size, tumor_clade_size, tumor_max_internal_branch_length, tumor_max_tip_length,
+                    tumor_tip_interal_branch_coef, root_tumor_clade_coef,
+                    colless_stat, colless_p, sackin_stat, sackin_p,
+                    retention_index, consistency_index,
+                    distcor = as.numeric(distcor$z.stat), distcorp = distcor$p,
+                    brainroottiprho = brainrootipcor$estimate, brainroottipp = brainrootipcor$p.value)
   
   ## Plot imaging
   gimg <- smeta %>% 
@@ -391,7 +373,7 @@ frontier_phy <- lapply (pts, function(pt) {
     labs(y = "", x = "", fill = "Imaging") +
     scale_fill_manual(values = c("white", rgb(255,0,255,50, maxColorValue = 255), rgb(255,0,255, maxColorValue = 255))) +
     coord_flip() +
-    theme_minimal()
+    theme_minimal(base_size = 25)
   
   ## Plot distances
   gdist <- smeta %>% select(Biopsy, Patient, Dist_to_CE_surface, Dist_to_nCE_surface) %>%
@@ -401,45 +383,115 @@ frontier_phy <- lapply (pts, function(pt) {
     geom_col(aes(x = Biopsy, y = distance, fill = m), color = "black", position = "dodge", width = 0.8) + # color = "black", size = 0.25, 
     geom_hline(yintercept = 0, linetype = 2) +
     labs(y = "Distance to Tumor\nSurface (in mm)", fill = "Location") +
-    scale_fill_manual(values = c("magenta", "gold")) +
+    scale_fill_manual(values = c("red", "orange")) +
     scale_y_continuous(breaks = seq(-20,30,10)) +
     coord_flip(ylim = c(-20,30)) +
-    theme_minimal() + 
+    theme_minimal(base_size = 25) + 
     theme(legend.position='none')
+  
+  ## Plot distances
+  gdist2 <- smeta %>% select(Biopsy, Patient, T1GCentroidDistance, FLAIRCentroidDistance) %>%
+    gather(key = "m", value = "distance", -Biopsy, -Patient) %>%
+    mutate(Biopsy = factor(Biopsy, levels = rev(unique(smeta$Biopsy)), ordered = TRUE))
+  pdist2 <- ggplot(gdist2) + 
+    geom_col(aes(x = Biopsy, y = distance, fill = m), color = "black", position = "dodge", width = 0.8) + # color = "black", size = 0.25, 
+    geom_hline(yintercept = 0, linetype = 2) +
+    labs(y = "Distance to Tumor\nCentroid (in mm)", fill = "Location") +
+    scale_fill_manual(values = c("red", "orange")) +
+    scale_y_continuous(breaks = seq(-20,30,10)) +
+    coord_flip() +
+    theme_minimal(base_size = 25) + 
+    theme(legend.position='none')
+  
+  ## Plot root-tip distances
+  proottip <- ggplot(smeta) + 
+    geom_col(aes(x = Biopsy, y = RootTipDist), fill = "orangered", size = 0.25, color = "black", width = 0.8) +
+    labs(y = "Root-tip distance") +
+    coord_flip() + 
+    theme_minimal(base_size = 25)
+  
+  scientific_10 <- function(x) {
+    parse(text=gsub("e", " %*% 10^", scales::scientific_format()(x)))
+  }
+  
+  ## Correlate cellularity vs root-tip distance
+  if(length(na.omit(smeta$HE)) > 1) {
+    corcellroottip <- cor.test(smeta$RootTipDist, smeta$HE)
+    pcellroottip <- sprintf("r = %s, p = %s", round(corcellroottip$estimate,2), scientific(corcellroottip$p.value, digits = 2))
+  } else {
+    pcellroottip = ""
+  }
+  
   
   ## Plot cellularity
   pcell <- ggplot(smeta) + 
     geom_col(aes(x = Biopsy, y = HE), fill = "pink", size = 0.25, color = "black") +
     labs(y = "Cellularity\ncells/mm2") +
+    scale_y_continuous(label=scientific_10) +
     coord_flip() + 
-    theme_minimal()
+    theme_minimal(base_size = 25) +
+    annotate(geom="text", x=1, y=2, label=pcellroottip, color="black", hjust = 0, size = 5)
+  
+  ## Correlate MIB vs root-tip distance
+  if(length(na.omit(smeta$MIB)) > 1) {
+    cormibroottip <- cor.test(smeta$RootTipDist, smeta$MIB)
+    pmibroottip <- sprintf("r = %s, p = %s", round(cormibroottip$estimate,2), scientific(cormibroottip$p.value, digits = 2))
+  } else {
+    pmibroottip = ""
+  }
   
   ## Plot MIB1
   pmib = ggplot(smeta) + 
     geom_col(aes(x = Biopsy, y = MIB), fill = "#800080", size = 0.25, color = "black") +
     labs(y = "%-MIB1\npositive cells") +
-    coord_flip(ylim = c(0, 100)) + 
-    theme_minimal()
+    coord_flip() + 
+    theme_minimal(base_size = 25) +
+    annotate(geom="text", x=1, y=0, label=pmibroottip, color="black", hjust = 0, size = 5)
   
-  ## Plot purity
-  ppur = ggplot() + #geom_hline(yintercept=0.5, linetype = 2) +
-    geom_line(data = smeta, aes(x=Biopsy, y=PAMES, group = Patient), color = "#999999", linetype = 2) +
-    geom_point(data = smeta, aes(x=Biopsy, y=PAMES, color = "orangered")) + #geom_point(data = smeta, aes(x=Biopsy, y=PAMES, color = ifelse(sample_no %% 2 == 1, "coral", "orangered"))) + #geom_text(data = smeta, aes(x=Biopsy, y = ifelse(sample_no %% 2 == 1, purity + 0.1, purity - 0.1), color = ifelse(sample_no %% 2 == 1, "coral", "orangered"), label = sample_no), size = 10/(15/4)) +
-    labs(y = "PAMES", fill = "Purity group") +
-    guides(color = FALSE) +
-    scale_color_manual(values = c("coral", "orangered")) +
-    scale_y_continuous(breaks = c(0.25,0.50,0.75,1.0)) +
-    coord_flip(ylim = c(0.25,1)) + 
-    theme_minimal()
+  ## Plot purity (line plot)
+  # ppur = ggplot() + #geom_hline(yintercept=0.5, linetype = 2) +
+  #   geom_line(data = smeta, aes(x=Biopsy, y=PAMES, group = Patient), color = "#999999", linetype = 2) +
+  #   geom_point(data = smeta, aes(x=Biopsy, y=PAMES, color = "orangered")) + #geom_point(data = smeta, aes(x=Biopsy, y=PAMES, color = ifelse(sample_no %% 2 == 1, "coral", "orangered"))) + #geom_text(data = smeta, aes(x=Biopsy, y = ifelse(sample_no %% 2 == 1, purity + 0.1, purity - 0.1), color = ifelse(sample_no %% 2 == 1, "coral", "orangered"), label = sample_no), size = 10/(15/4)) +
+  #   labs(y = "PAMES", fill = "Purity group") +
+  #   guides(color = FALSE) +
+  #   scale_color_manual(values = c("coral", "orangered")) +
+  #   scale_y_continuous(breaks = c(0.25,0.50,0.75,1.0)) +
+  #   coord_flip(ylim = c(0.25,1)) + 
+  #   theme_minimal(base_size = 25)
   
-  #g1 <- ggplotGrob(ptre)
-  #g2 <- ggplotGrob(pdistj + guides(fill = FALSE))
-  #g3 <- ggplotGrob(pdists + guides(fill = FALSE))
-  #g4 <- ggplotGrob(ppur)
-  #g5 <- ggplotGrob(pdist)
-  #g6 <- ggplotGrob(pcell)
-  #g7 <- ggplotGrob(pmib)
+  ## Correlate purity vs root-tip distance
+  corpamesroottip <- cor.test(smeta$RootTipDist, smeta$PAMES)
+  ppamesroottip <- sprintf("r = %s, p = %s", round(corpamesroottip$estimate,2), scientific(corpamesroottip$p.value, digits = 2))
   
+  ## Plot purity (bar plot)
+  ppur = ggplot(smeta) + 
+    geom_col(aes(x = Biopsy, y = PAMES), color = "black", fill = "gold", width = 0.8) + 
+    labs(y = "PAMES") +
+    guides(color = FALSE) + #scale_y_continuous(breaks = c(0.25,0.50,0.75,1.0)) +
+    scale_y_continuous(breaks = c(0,0.25,0.50,0.75,1.0)) +
+    coord_flip() + 
+    theme_minimal(base_size = 25) +
+    annotate(geom="text", x=1, y=0, label=ppamesroottip, color="black", hjust = 0, size = 5)
+  
+  # Plot brain distance
+  pbrain = ggplot(smeta) + 
+    geom_col(aes(x = Biopsy, y = BrainDistance), color = "black", fill = "gray", width = 0.8) + 
+    labs(y = "Distance to brain\nsurface (mm)") +
+    guides(color = FALSE) + #scale_y_continuous(breaks = c(0.25,0.50,0.75,1.0)) +
+    coord_flip() + 
+    theme_minimal(base_size = 25) + 
+    annotate(geom="text", x=1, y=0, label=pbrainroottip, color="black", hjust = 0, size = 5)
+  
+  
+  # Plot brain centroid distance
+  pbraincen = ggplot(smeta) + 
+    geom_col(aes(x = Biopsy, y = BrainCentroidDistance), color = "black", fill = "gray", width = 0.8) + 
+    labs(y = "Distance to brain\ncentroid (mm)") +
+    guides(color = FALSE) + #scale_y_continuous(breaks = c(0.25,0.50,0.75,1.0)) +
+    coord_flip() + 
+    theme_minimal(base_size = 25)
+
+  ## Empty theme for combining plots
   null_x <- theme(axis.title.y=element_blank(),
                  axis.text.y=element_blank(),
                  axis.ticks.y=element_blank()) 
@@ -448,21 +500,26 @@ frontier_phy <- lapply (pts, function(pt) {
   ## https://github.com/YuLab-SMU/ggtree/issues/313
   
   p1 <- ptre
+  p1b <- proottip + null_x
   p2 <- pdistj + null_x + guides(fill = FALSE)
   p3 <- pdists + null_x + guides(fill = FALSE)
   p4 <- ppur + null_x
   p5 <- pdist + null_x + guides(fill = FALSE)
-  p6 <- pcell + null_x
-  p7 <- pmib + null_x
+  p5b <- pdist2 + null_x + guides(fill = FALSE)
+  p6 <- pbrain + null_x 
+  p6b <- pbraincen + null_x 
+  p7 <- pcell + null_x
+  p8 <- pmib + null_x
   
-  combplot <- egg::ggarrange(p1, p2, p3, p4, p5, p6, p7, ncol = 7, top = "foo", widths = c(rep(1,3),rep(0.5,4)))
+  combplot <- egg::ggarrange(p1, p1b, p2, p3, p4, p5, p6, p7, p8, ncol = 9, top = pt, widths = c(1, 0.5, rep(1,2),rep(0.5,5)))
   
-  pdf(file = sprintf("figures/phylo/%s.pdf",pt), height = 6, width = 24)
-  plot(combplot)
+  #pdf(file = sprintf("figures/phylo/%s.png",pt), height = 6, width = 24)
+  png(bg = "white", file = sprintf("figures/phylo/%s.png",pt), height = 576, width = 2304)
+  print(combplot)
   dev.off()
   
-  out <- list(res = res, ptre = ptre, ptre_full = ptre_full, pchro = pchro, pltt = pltt, ltt = lttchro, pmib = pmib, pcell = pcell, pdist = pdist, pimg = pimg, ppur = ppur)
-  
+  #out <- list(res = res, ptre = ptre, ptre_full = ptre_full, pchro = pchro, pltt = pltt, ltt = lttchro, pmib = pmib, pcell = pcell, pdist = pdist, pimg = pimg, ppur = ppur)
+  out <- list(res = res, ptre = ptre, ptre_full = ptre_full, pmib = pmib, pcell = pcell, pdist = pdist, pimg = pimg, ppur = ppur)
   return(out)
 })
 names(frontier_phy) <- pts
@@ -476,13 +533,21 @@ mut_noncodel <- c("Toronto-01", "UCSF-01", "UCSF-04","UCSF-17", "UCSF-18", "UCSF
 wt <- c("Toronto-02", "Toronto-03", "Toronto-04", "Toronto-05", "VUmc-02", "VUmc-07", "VUmc-08", "Vumc-11", "Vumc-13", "Vumc-14", "Vumc-17")
 mut_codel <- c("UCSF-49", "VUmc-05")
 
+## Subset res to get volumes
+resmeta <- meta %>% select(patient = Patient, Dataset, BrainVol, T1GVol, FLAIRVol) %>% 
+  distinct() %>%
+  mutate(T1GVol = abs(T1GVol), FLAIRVol = abs(FLAIRVol))
+
+## Extract results from list
 res <- purrr::map(frontier_phy, "res") %>% 
   bind_rows() %>% 
   mutate(idh_codel_subtype = case_when(patient %in% mut_noncodel ~ "IDHmut-noncodel",
                                        patient %in% mut_codel ~ "IDHmut-codel",
                                        patient %in% wt ~ "IDHwt",
                                        TRUE ~ NA_character_)) %>%
-  left_join(select(meta, patient = Patient, Dataset) %>% distinct())
+  left_join(resmeta)
+
+## Plot volumes
 
 ggplot(res, aes(x=age, color = idh_codel_subtype)) + geom_density()
 
@@ -496,7 +561,16 @@ ggplot(res, aes(x = patient, y = -log10(colless_p), fill = idh_codel_subtype)) +
   geom_hline(yintercept = -log10(0.05), col = "red", linetype = 2) + 
   labs(x = "Patient", y = "-log10(P-value)", fill = "IDH-codel subtype") +
   coord_flip() +
-  theme_minimal()
+  theme_minimal(base_size = 25)
+
+## Scatter plot of Spearman correlation of distance to brain surface and phylogenetic root-tip distance
+ggplot(res, aes(x = brainroottiprho, y = -log10(brainroottipp), color = idh_codel_subtype, shape = Dataset)) + 
+  geom_point() + 
+  geom_hline(yintercept = -log10(0.05), col = "red", linetype = 2) +
+  geom_text_repel(aes(label = patient, hjust = brainroottiprho > 0), nudge_x = 0.01) +
+  guides(alpha = FALSE) +
+  labs(x = "Spearman Rho", y = "-log10(P-value)", color = "IDH-codel subtype") +
+  theme_minimal(base_size = 25)
 
 ## Plot Pybus-Harvey P-values
 ggplot(res, aes(x = patient, y = -log10(pybus_harvey_p), fill = idh_codel_subtype)) + geom_col() + geom_hline(yintercept = -log10(0.05), col = "red", linetype = 2) + coord_flip()
@@ -508,7 +582,7 @@ ggplot(res, aes(x = pybus_harvey_gamma, y = -log10(pybus_harvey_p), color = idh_
   geom_text_repel(aes(label = patient, alpha = pybus_harvey_p < 0.05, hjust = pybus_harvey_gamma > 0), nudge_x = 0.5) +
   guides(alpha = FALSE) +
   labs(x = "Pybus-Harvey gamma (y) statistic", y = "-log10(P-value)", color = "IDH-codel subtype") +
-  theme_minimal()
+  theme_minimal(base_size = 25)
 
 ## Plot Age and Tumor Age
 ggplot(res, aes(x = patient)) + 
@@ -517,7 +591,7 @@ ggplot(res, aes(x = patient)) +
   geom_point(aes(y = age), color = "red") +
   labs(y = "Tumor origin (blue) - Tumor detection (red)", x = "Patient") +
   coord_flip() +
-  theme_minimal()
+  theme_minimal(base_size = 25)
 
 res2 <- res %>% filter(Dataset != "Toronto")
 ggplot(res2, aes(x = age - tumor_mrca_age, color = idh_codel_subtype)) + geom_density()
@@ -692,8 +766,6 @@ cowplot::plot_grid(plotlist = vumcplots[1:4], ncol = 6)
 cowplot::plot_grid(plotlist = vumcplots[5:8], ncol = 2)
 cowplot::plot_grid(plotlist = vumcplots[9:12], ncol = 2)
 cowplot::plot_grid(plotlist = vumcplots[13:16], ncol = 2)
-
-library(egg)
 
 gg_cbind <- function(..., widths = NULL) {
   if(length(match.call()) - 2 != length(widths))

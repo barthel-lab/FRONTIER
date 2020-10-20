@@ -55,7 +55,6 @@ frontier_phy <- lapply (pts, function(pt) {
   ## Determine maximum root to tip distance
   max_root_tip_dist <- max(dist.nodes(tre)[which(tre$tip.label=="ROOT"),])
   
-  
   ## Build spatial tree (ROOT pruned)
   trespat <- drop.tip(tre, 'ROOT')
   trespat$tip.label <- smeta$Biopsy[match(trespat$tip.label,smeta$label)]
@@ -82,60 +81,60 @@ frontier_phy <- lapply (pts, function(pt) {
   gdist <- dist.nodes(trespat)
   
   ## Phylin analysis
-  library(phylin)
-  
-  n_tips <- length(trespat$tip.label)
-  gv <- gen.variogram(as.dist(mdist[1:n_tips,1:n_tips]), as.dist(gdist[1:n_tips,1:n_tips]), lag = quantile(mdist[1:n_tips,1:n_tips], 0.1), lmax = max(mdist[1:n_tips,1:n_tips]))
-  gv <- gv.model(gv)
-  plot(gv)
-  
-  gv2 <- gv.model(gv, range=8)
-  gv3 <- gv.model(gv, model='linear', range=8)
-  plot(gv2)
-  plot(gv3)
-  
-  grid <- expand.grid(x = seq(floor(min(mspat3d_nodes_tips$X)), ceiling(max(mspat3d_nodes_tips$X)), length.out = 25),
-                      y = seq(floor(min(mspat3d_nodes_tips$Y)), ceiling(max(mspat3d_nodes_tips$Y)), length.out = 25),
-                      z = seq(floor(min(mspat3d_nodes_tips$Z)), ceiling(max(mspat3d_nodes_tips$Z)), length.out = 25))
-
-  kri <- krig(dist.nodes(tre)[which(tre$tip.label=="ROOT"),][1:n_tips],
-              as.matrix(mspat3d_tips[,c('X','Y','Z')]),
-              grid,
-              gv,
-              distFUN = euc.dist.2)
-  
-  tmp <- gridkri %>% filter(Z > 0.12)
-  
-  ## Add samples back in
-  
-  
-  v <- tmp$Z
-  vlim <- range(v)
-  vlen <- 100*(vlim[2] - vlim[1]) + 1
-  
-  colorlut <- rev(heat.colors(vlen)) # height color lookup table
-  col <- colorlut[ 100*v - 100*vlim[1] + 1 ]
-  
-  rgl.open()# Open a new RGL device
-  rgl.bg(color = "white") # Setup the background color
-  rgl.spheres(tmp$x, tmp$y, tmp$z, r = 1, color = colorlut)
-  
-  open3d()
-  surface3d(gridkri$x, gridkri$y, gridkri$z, color = col, back = "lines")
-  
-  ## Euclidian distance function
-  ## FROM: https://stackoverflow.com/questions/39671579/compute-euclidean-distance-matrix-from-x-y-z-coordinates
+  # library(phylin)
+  # 
+  # n_tips <- length(trespat$tip.label)
+  # gv <- gen.variogram(as.dist(mdist[1:n_tips,1:n_tips]), as.dist(gdist[1:n_tips,1:n_tips]), lag = quantile(mdist[1:n_tips,1:n_tips], 0.1), lmax = max(mdist[1:n_tips,1:n_tips]))
+  # gv <- gv.model(gv)
+  # plot(gv)
+  # 
+  # gv2 <- gv.model(gv, range=8)
+  # gv3 <- gv.model(gv, model='linear', range=8)
+  # plot(gv2)
+  # plot(gv3)
+  # 
+  # grid <- expand.grid(x = seq(floor(min(mspat3d_nodes_tips$X)), ceiling(max(mspat3d_nodes_tips$X)), length.out = 25),
+  #                     y = seq(floor(min(mspat3d_nodes_tips$Y)), ceiling(max(mspat3d_nodes_tips$Y)), length.out = 25),
+  #                     z = seq(floor(min(mspat3d_nodes_tips$Z)), ceiling(max(mspat3d_nodes_tips$Z)), length.out = 25))
+  # 
+  # kri <- krig(dist.nodes(tre)[which(tre$tip.label=="ROOT"),][1:n_tips],
+  #             as.matrix(mspat3d_tips[,c('X','Y','Z')]),
+  #             grid,
+  #             gv,
+  #             distFUN = euc.dist.2)
+  # 
+  # tmp <- gridkri %>% filter(Z > 0.12)
+  # 
+  # ## Add samples back in
+  # 
+  # 
+  # v <- tmp$Z
+  # vlim <- range(v)
+  # vlen <- 100*(vlim[2] - vlim[1]) + 1
+  # 
+  # colorlut <- rev(heat.colors(vlen)) # height color lookup table
+  # col <- colorlut[ 100*v - 100*vlim[1] + 1 ]
+  # 
+  # rgl.open()# Open a new RGL device
+  # rgl.bg(color = "white") # Setup the background color
+  # rgl.spheres(tmp$x, tmp$y, tmp$z, r = 1, color = colorlut)
+  # 
+  # open3d()
+  # surface3d(gridkri$x, gridkri$y, gridkri$z, color = col, back = "lines")
+  # 
+  # ## Euclidian distance function
+  # ## FROM: https://stackoverflow.com/questions/39671579/compute-euclidean-distance-matrix-from-x-y-z-coordinates
   euc.dist.3 <- function(x1, x2, y1, y2, z1, z2 ) sqrt( (x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2 )
-  
-  euc.dist.2 <- function(from, to, ..) {
-    
-    out <- matrix(NA, nrow = nrow(from), ncol = nrow(to))
-    for(i in 1:nrow(out))
-      for(j in 1:ncol(out))
-        out[i,j] = sqrt( (to[j,1] - from[i,1])^2 + (to[j,2] - from[i,2])^2 + (to[j,3] - from[i,3])^2 )
-    
-    return(out)
-  }
+  # 
+  # euc.dist.2 <- function(from, to, ..) {
+  #   
+  #   out <- matrix(NA, nrow = nrow(from), ncol = nrow(to))
+  #   for(i in 1:nrow(out))
+  #     for(j in 1:ncol(out))
+  #       out[i,j] = sqrt( (to[j,1] - from[i,1])^2 + (to[j,2] - from[i,2])^2 + (to[j,3] - from[i,3])^2 )
+  #   
+  #   return(out)
+  # }
   
   ## Determine segments
   mspat3d_seg <- tibble(Patient = pt, Node1 = trespat$edge[,1], Node2 = trespat$edge[,2], 
@@ -165,39 +164,39 @@ frontier_phy <- lapply (pts, function(pt) {
                     'G-CIMP-high'='green','Inflammatory-TME'='orange',
                     'Mesenchymal-like'='blue','Reactive-TME'='yellow')
   
-  plot3d(rbind(m_tips,m_nodes), xlab = "X", ylab = "Y", 
-         zlab = "Z", axes = TRUE, box = TRUE, 
-         params = params)
-  
-  spheres3d(m_tips, radius = 0.02 * mean(apply(m_tips, 2, max) - apply(m_tips, 2, min)),
-            color = subtype_cols[mspat3d_tips$Subtype])
-  
-  for (i in 1:nrow(mspat3d_seg)) { message(i); segments3d(as.numeric(mspat3d_seg[i,c("X1","X2")]), as.numeric(mspat3d_seg[i,c("Y1","Y2")]), as.numeric(mspat3d_seg[i,c("Z1","Z2")]), lwd = 1, col = "lightgray") }
-  
-  for (i in 1:nrow(mspat3d_seg)) { message(i); arrow3d(p0 = c(mspat3d_seg$Xs[i], mspat3d_seg$Ys[i],  mspat3d_seg$Zs[i]),
-                                                       p1 = c(mspat3d_seg$Xe[i], mspat3d_seg$Ye[i],  mspat3d_seg$Ze[i])) }
-  
-  arrow3d(p0 = c(mspat3d_seg$Xs[i], mspat3d_seg$Ys[i],  mspat3d_seg$Zs[i]),
-          p1 = c(mspat3d_seg$Xe[i], mspat3d_seg$Ye[i],  mspat3d_seg$Ze[i]))
-  
-  rgl.spheres(tmp$x, tmp$y, tmp$z, r = 1, color = colorlut)
-  
-  ems <- colMeans(m_tips)
-  rs <- apply(rbind(m_tips,m_nodes), 2, range)
-  rs <- rs[2, ] - rs[1, ]
-  for (i in 1:nrow(mspat3d_tips)) {
-    adj <- 0.03 * rs * (2 * (m_tips[i, ] > ms) - 1)
-    text3d(m_tips[i, ] + adj, texts = mspat3d_tips$Biopsy[i])
-  }
-  
-  xx <- spin3d(axis = c(0, 0, 1), rpm = 10)
-  play3d(xx, duration = 5)
-  
-  movie3d(xx,
-          movie= sprintf("/tier2/verhaak-lab/barthf/FRONTIER/%s-3d",pt),
-          duration=10, convert=TRUE, clean=TRUE, verbose=TRUE, type="gif")
-  
-  phylomorphospace3d(trespat, X=mspat3d, A=mspat3d_nodes_m, method = "dynamic")
+  # plot3d(rbind(m_tips,m_nodes), xlab = "X", ylab = "Y", 
+  #        zlab = "Z", axes = TRUE, box = TRUE, 
+  #        params = params)
+  # 
+  # spheres3d(m_tips, radius = 0.02 * mean(apply(m_tips, 2, max) - apply(m_tips, 2, min)),
+  #           color = subtype_cols[mspat3d_tips$Subtype])
+  # 
+  # for (i in 1:nrow(mspat3d_seg)) { message(i); segments3d(as.numeric(mspat3d_seg[i,c("X1","X2")]), as.numeric(mspat3d_seg[i,c("Y1","Y2")]), as.numeric(mspat3d_seg[i,c("Z1","Z2")]), lwd = 1, col = "lightgray") }
+  # 
+  # for (i in 1:nrow(mspat3d_seg)) { message(i); arrow3d(p0 = c(mspat3d_seg$Xs[i], mspat3d_seg$Ys[i],  mspat3d_seg$Zs[i]),
+  #                                                      p1 = c(mspat3d_seg$Xe[i], mspat3d_seg$Ye[i],  mspat3d_seg$Ze[i])) }
+  # 
+  # arrow3d(p0 = c(mspat3d_seg$Xs[i], mspat3d_seg$Ys[i],  mspat3d_seg$Zs[i]),
+  #         p1 = c(mspat3d_seg$Xe[i], mspat3d_seg$Ye[i],  mspat3d_seg$Ze[i]))
+  # 
+  # rgl.spheres(tmp$x, tmp$y, tmp$z, r = 1, color = colorlut)
+  # 
+  # ems <- colMeans(m_tips)
+  # rs <- apply(rbind(m_tips,m_nodes), 2, range)
+  # rs <- rs[2, ] - rs[1, ]
+  # for (i in 1:nrow(mspat3d_tips)) {
+  #   adj <- 0.03 * rs * (2 * (m_tips[i, ] > ms) - 1)
+  #   text3d(m_tips[i, ] + adj, texts = mspat3d_tips$Biopsy[i])
+  # }
+  # 
+  # xx <- spin3d(axis = c(0, 0, 1), rpm = 10)
+  # play3d(xx, duration = 5)
+  # 
+  # movie3d(xx,
+  #         movie= sprintf("/tier2/verhaak-lab/barthf/FRONTIER/%s-3d",pt),
+  #         duration=10, convert=TRUE, clean=TRUE, verbose=TRUE, type="gif")
+  # 
+  # phylomorphospace3d(trespat, X=mspat3d, A=mspat3d_nodes_m, method = "dynamic")
   
   ## Export dynamic 3D plot as GIF
   #pmorph3d <- phylomorphospace3d(trespat, X=mspat3d, A=mspat3dN, method = "dynamic")
