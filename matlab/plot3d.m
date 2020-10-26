@@ -2,12 +2,18 @@
 % Script assumes metadata excel sheet has already been loaded to workspace
 % as a table named VUmc
 
-% Add matlab to path
-addpath('matlab')
+% Add include directory to path
+addpath('include')
+
+% File pointers
+nodfp = '../results/meta/FRONTIER.nodes.transformed.csv'
+segfp = '../results/meta/FRONTIER.seg.transformed.csv'
+niimapfp = '../results/meta/FRONTIER.nii.csv'
+outmovbase = '../results/mov/'
 
 % Load node positions and segments connecting nodes
-noddat = readtable('FRONTIER.nodes.csv')
-segdat = readtable('FRONTIER.seg.csv')
+noddat = readtable(nodfp)
+segdat = readtable(segfp)
 
 % Identify unique patients in dataset
 pts = unique(noddat.Patient)
@@ -73,7 +79,7 @@ for pti = 1:length(pts)
     filedir = 'nii';
     
     % Load nii filemap
-    niifiles = readtable('FRONTIER.nii.csv')
+    niifiles = readtable(niimapfp)
     sniifiles = niifiles(find(strcmp(niifiles.Patient,patient)),:)
     
     % Prepare nii file paths

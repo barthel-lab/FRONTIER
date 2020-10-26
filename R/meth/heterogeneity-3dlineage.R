@@ -19,11 +19,28 @@ library(magick)
 options(rgl.printRglwidget = TRUE)
 options(rgl.useNULL = TRUE)
 
-meta <- read.csv('sandbox/FRONTIER.meta.csv', as.is = TRUE) %>% filter(Dataset == "VUmc")
+meta <- read.csv('results/meta/FRONTIER.meta.csv', as.is = TRUE) %>% filter(Dataset == "VUmc")
 meta$Biopsy[meta$Sentrix_Accession=='202242420061_R05C01'] <- "S7"
+#meta$Patient = gsub("Vumc", "VUmc", meta$Patient) ## fix capitalization issue
+meta$P <- sprintf("P%s", substr(meta$Patient,6,7))
 
-pts <- sort(unique(meta$Patient))
-pt <- "VUmc-04"
+pts <- sort(unique(meta$Patient)) #pt <- "VUmc-04"
+
+## Update coordinates from Roelant analysis
+old_coordfiles <- list.files('data/fsl/Sample_coordinaten_nifti/', full.names = TRUE)
+names(old_coordfiles) = substr(basename(old_coordfiles), 0, 9)
+new_coordfiles <- list.files('data/fsl/Sample_coordinaten_nifti_MNI/', full.names = TRUE)
+names(new_coordfiles) = substr(basename(new_coordfiles), 0, 9)
+
+## Extract coordinates
+old_coord <- old_coordfiles %>% map_dfr(.id = "id", read_delim, delim=" ", col_names = c("Xo","Yo","Zo"))
+new_coord <- new_coordfiles %>% map_dfr(.id = "id", read_delim, delim=",", col_names = c("Xn","Yn","Zn"))
+coord <- old_coord %>% left_join(new_coord) %>%
+  mutate(P = sprintf("P%s", substr(id,2,3)),
+         Biopsy = sprintf("S%s", gsub("^0","",substr(id,8,9))))
+
+## Merge coordinates w/ meta
+meta <- meta %>% left_join(coord)
 
 frontier_phy <- lapply (pts, function(pt) {
   
@@ -60,22 +77,22 @@ frontier_phy <- lapply (pts, function(pt) {
   trespat$tip.label <- smeta$Biopsy[match(trespat$tip.label,smeta$label)]
   
   ## Plot phylogeny in 3D phylomorphospace
-  mspat3d <- as.matrix(smeta[-which(smeta$label=="ROOT"),c('X','Y','Z')])
+  mspat3d <- as.matrix(smeta[-which(smeta$label=="ROOT"),c('Xn','Yn','Zn')])
   rownames(mspat3d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
   
   ## Convert to dataframe for metadata
   mspat3d_tips <- as_tibble(mspat3d) %>% mutate(Biopsy = rownames(mspat3d), Tip = TRUE) %>% 
-    left_join(smeta) %>% mutate(Node = match(Biopsy, trespat$tip.label)) %>% select(Patient, Node, Tip, Biopsy, X, Y, Z, HE, MIB, HBclass, HBsubclass, Subtype)
+    left_join(smeta) %>% mutate(Node = match(Biopsy, trespat$tip.label)) %>% select(Patient, Node, Tip, Biopsy, Xn, Yn, Zn, HE, MIB, HBclass, HBsubclass, Subtype)
   
   ## Determine 3D location of nodes
   mspat3d_nodes_m <- apply(mspat3d, 2, function(x, tree) fastAnc(tree, x), tree = trespat)
   mspat3d_nodes <- as_tibble(mspat3d_nodes_m) %>% mutate(Patient = pt, Node = as.integer(rownames(mspat3d_nodes_m)), Tip = FALSE) %>%
-    select(Patient,Node,Tip,X,Y,Z)
+    select(Patient,Node,Tip,Xn,Yn,Zn)
   
   mspat3d_nodes_tips <- mspat3d_tips %>% full_join(mspat3d_nodes) %>% arrange(Node)
   
   ## Compute spatial distances
-  mdist <- dist(mspat3d_nodes_tips[,c('X','Y','Z')]) %>% as.matrix()
+  mdist <- dist(mspat3d_nodes_tips[,c('Xn','Yn','Zn')]) %>% as.matrix()
   
   ## Extract genetic distances
   gdist <- dist.nodes(trespat)
@@ -140,9 +157,9 @@ frontier_phy <- lapply (pts, function(pt) {
   mspat3d_seg <- tibble(Patient = pt, Node1 = trespat$edge[,1], Node2 = trespat$edge[,2], 
                         BranchLength = trespat$edge.length) %>%
     left_join(mspat3d_nodes_tips, by = c("Node1"="Node", "Patient"="Patient")) %>%
-    select(Patient, Node1, X1 = X, Y1 = Y, Z1 = Z, Node2, BranchLength) %>% 
+    select(Patient, Node1, X1 = Xn, Y1 = Yn, Z1 = Zn, Node2, BranchLength) %>% 
     left_join(mspat3d_nodes_tips, by = c("Node2"="Node", "Patient"="Patient")) %>%
-    select(Patient, Node1, X1, Y1, Z1, Node2, X2 = X, Y2 = Y, Z2 = Z, BranchLength) %>%
+    select(Patient, Node1, X1, Y1, Z1, Node2, X2 = Xn, Y2 = Yn, Z2 = Zn, BranchLength) %>%
     mutate(PhyDist = euc.dist.3(X1,X2,Y1,Y2,Z1,Z2),
            MaxRootTipRelBranchLength = BranchLength / max_root_tip_dist,
            Magnitude = MaxRootTipRelBranchLength * PhyDist,
@@ -155,8 +172,8 @@ frontier_phy <- lapply (pts, function(pt) {
            Ye = Y1+(Y2-Y1)*(DistToEnd/PhyDist),
            Ze = Z1+(Z2-Z1)*(DistToEnd/PhyDist))
   
-  m_nodes <- as.matrix(mspat3d_nodes[,c('X','Y','Z')])
-  m_tips <-  as.matrix(mspat3d_tips[,c('X','Y','Z')])
+  m_nodes <- as.matrix(mspat3d_nodes[,c('Xn','Yn','Zn')])
+  m_tips <-  as.matrix(mspat3d_tips[,c('Xn','Yn','Zn')])
   
   params <- get("r3dDefaults")
   

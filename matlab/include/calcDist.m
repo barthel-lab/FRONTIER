@@ -55,4 +55,13 @@ for i = 1:size(sampleCoords,1)
     distances(i) = dist;
 end
 
+%%% Points within volume need to be adjusted by a factor of -1
+inpoly = inpolyhedron(f,v,sampleCoords,'FlipNormals',true)
+distances(inpoly == 1) = distances(inpoly == 1) * -1
+
+
+%tri = delaunayn([x y z]); % Generate delaunay triangulization
+%tn = tsearchn([x y z], tri, xyz'); % Determine which triangle point is within
+%IsInside = ~isnan(tn) % Convert to logical vector
+
 end
