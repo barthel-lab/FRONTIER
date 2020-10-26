@@ -35,7 +35,7 @@ names(Cellcolor) = c("Classic-like","Codel","Cortex","G-CIMP-high","Inflammatory
 ## Sort by purity
 meta = pData(all_data) %>% as.data.frame() %>%
   filter(!filter) %>%
-  arrange(Patient, purity) %>% 
+  arrange(Patient, desc(purity)) %>% 
   mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = unique(Sentrix_Accession))) %>% #mutate(Dist_to_tumor_surface = ifelse(is.na(Dist_to_tumor_surface), 0, Dist_to_tumor_surface)) %>% #
   mutate(Patient = factor(gsub("Vumc", "VUmc", Patient), levels = c(sprintf("VUmc-%s", str_pad(c(5,3,6,9,10,12,15,1,4,2,7,8,11,13,14,17),2,"left",0)),
                                                                     sprintf("Toronto-%s", str_pad(1:5,2,"left",0)),
@@ -67,15 +67,22 @@ plot_theme = theme_minimal(base_size = 10, base_family = "sans") + theme(axis.te
 null_legend = theme(legend.position = 'none')
 null_x = theme(axis.title.x=element_blank(),
                axis.text.x=element_blank(),
-               axis.ticks.x=element_blank()) 
+               axis.ticks.x=element_blank())
+null_y = theme(axis.title.y=element_blank(),
+               axis.text.y=element_blank(),
+               axis.ticks.y=element_blank()) 
 bottom_x = theme(axis.text.x=element_blank()) 
 null_facet = theme(strip.background = element_blank(),
-                   strip.text.x = element_blank())
-top_margin = theme(plot.margin= unit(c(1, 1, 0.1, 1), "lines")) ## Top, Right, Bottom, Left
-middle_margin = theme(plot.margin= unit(c(0, 1, 0.1, 1), "lines"))
-bottom_margin = theme(plot.margin= unit(c(0, 1, 1, 1), "lines"))
+                   strip.text.x = element_blank(),
+                   strip.text.y = element_blank())
+#top_margin = theme(plot.margin= unit(c(1, 1, 0.1, 1), "lines")) ## Top, Right, Bottom, Left
+#middle_margin = theme(plot.margin= unit(c(0, 1, 0.1, 1), "lines"))
+
+top_margin = theme(plot.margin= unit(c(1, 0, 1, 0), "lines")) ## Top, Right, Bottom, Left
+middle_margin = theme(plot.margin= unit(c(1, 0, 1, 0), "lines"))
+#bottom_margin = theme(plot.margin= unit(c(0, 1, 1, 1), "lines"))
 #plot_grid = facet_grid(. ~ Patient, scales = "free_x", space = "free")
-plot_grid = facet_grid(Patient ~ ., scales = "free_y", space = "free")
+plot_grid = facet_grid(Patient ~ ., scales = "free_y", space = "free", switch = "y")
 #gene_grid = facet_grid(pathway ~ Patient, scales = "free", space = "free")
 
 ##################################################
@@ -93,13 +100,13 @@ testPlot <- function(gg, grid = TRUE) {
 
 p1 = ggplot() + #geom_hline(yintercept=0.5, linetype = 2) +
   #geom_line(data = meta, aes(x=Sentrix_Accession, y=purity, group = Patient), color = "#999999", linetype = 2) +
-  geom_col(data = meta, aes(x=Sentrix_Accession, y=purity, fill = ifelse(sample_no %% 2 == 1, "coral", "orangered")),color = "black") +
+  geom_col(data = meta, aes(x=Sentrix_Accession, y=-purity, fill = ifelse(sample_no %% 2 == 1, "coral", "orangered")),color = "black") +
   #geom_text(data = meta, aes(x=Sentrix_Accession, y = ifelse(sample_no %% 2 == 1, purity + 0.1, purity - 0.1), color = ifelse(sample_no %% 2 == 1, "coral", "orangered"), label = sample_no), size = 10/(15/4)) +
   labs(y = "PAMES", fill = "Purity group") +
   guides(color = FALSE) +
   scale_fill_manual(values = c("coral", "orangered")) +
-  scale_y_continuous(breaks = c(0.25,0.50,0.75,1.0)) +
-  coord_flip(xlim = c(0.25,1))
+  scale_y_continuous(breaks = 0-c(0.25,0.50,0.75,1.0), labels = c(0.25,0.50,0.75,1.0)) +
+  coord_flip(ylim = rev(0-c(0.25,1)))
 
 testPlot(p1)
 
@@ -113,7 +120,8 @@ tmp = meta %>%
 p2 = ggplot() +
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = y, fill = Cell_Predict), color = "black") +
   labs(y = "", fill = "Class assignment") +
-  scale_fill_manual(values = Cellcolor)
+  scale_fill_manual(values = Cellcolor) + 
+  coord_flip()
 
 testPlot(p2)
 
@@ -127,7 +135,8 @@ tmp = meta %>%
 p3 = ggplot() +
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = Class, fill = Prediction), color = "black") +
   labs(y = "", fill = "Prediction Probability") +
-  scale_fill_distiller(palette = "Blues", direction = 1) #scale_fill_gradient(low = "#FFFFFF", high = "#084594")
+  scale_fill_distiller(palette = "Blues", direction = 1) + #scale_fill_gradient(low = "#FFFFFF", high = "#084594") +
+  coord_flip()
 
 testPlot(p3)
 
@@ -141,7 +150,8 @@ tmp = HB0.5 %>%
 p4 = ggplot() +
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = y, fill = HBsubclass), color = "black") +
   labs(y = "", fill = "DKFZ subtype") +
-  scale_fill_manual(values = HBcolor)
+  scale_fill_manual(values = HBcolor) +
+  coord_flip()
 
 testPlot(p4)
 
@@ -156,7 +166,8 @@ tmp <- HBprob %>%
 p5 = ggplot() +
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = Class, fill = Prediction), color = "black") +
   labs(y = "", fill = "Prediction Probability") +
-  scale_fill_distiller(palette = "Blues", direction = 1) #scale_fill_gradient(low = "#FFFFFF", high = "#084594")
+  scale_fill_distiller(palette = "Blues", direction = 1) + #scale_fill_gradient(low = "#FFFFFF", high = "#084594")
+  coord_flip()
 
 testPlot(p5)
 
@@ -172,31 +183,44 @@ gleg4 = g_legend(p4)
 #gleg8 = g_legend(p8)
 
 ## raw sorted plots
-plot_grid = facet_grid(. ~ Patient, scales = "free_x", space = "free") #NULL
+#plot_grid = facet_grid(. ~ Patient, scales = "free_x", space = "free") #NULL
 #gene_grid = facet_grid(pathway ~ Patient, scales = "free", space = "free")
 
 ## Plots
-#g0 = ggplotGrob(p0 + plot_grid + plot_theme + null_legend + null_x + top_margin)                  %>% gtable_frame()
-g1 = ggplotGrob(p1 + plot_grid + plot_theme + null_legend + null_x + top_margin)  %>% gtable_frame() #+ theme(axis.title = element_text(size = 10), axis.text = element_text(size=10))) 
-g2 = ggplotGrob(p2 + plot_grid + plot_theme + null_legend + null_x + null_facet + middle_margin) %>% gtable_frame() #+ theme(axis.title = element_text(size = 10), axis.text = element_text(size=10))) 
-g3 = ggplotGrob(p3 + plot_grid + plot_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
-g4 = ggplotGrob(p4 + plot_grid + plot_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
-g5 = ggplotGrob(p5 + plot_grid + plot_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
-#g6 = ggplotGrob(p6 + plot_grid + plot_theme + null_legend + null_x + null_facet + middle_margin)  %>% gtable_frame()
-#g7 = ggplotGrob(p7 + plot_grid + plot_theme + null_legend + null_x + null_facet + bottom_margin)  %>% gtable_frame()
-#g8 = ggplotGrob(p8 + gene_grid + plot_theme + null_legend + bottom_x + null_facet + bottom_margin + theme(strip.text.y = element_text(size = 12)))      %>% gtable_frame()
+g1 = ggplotGrob(p1 + plot_grid + plot_theme + null_legend + null_y + top_margin + theme(strip.text.y.left = element_text(angle = 0)))  %>% gtable_frame() #+ theme(axis.title = element_text(size = 10), axis.text = element_text(size=10))) 
+g2 = ggplotGrob(p2 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin) %>% gtable_frame() #+ theme(axis.title = element_text(size = 10), axis.text = element_text(size=10))) 
+g3 = ggplotGrob(p3 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
+g4 = ggplotGrob(p4 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
+g5 = ggplotGrob(p5 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
 
-g = gtable_rbind(g1, g2, g3, g4, g5)
+#g = gtable_cbind(g1, g2, g3, g4, g5)
 gleg = gtable_rbind(gleg2, gleg3, gleg4)
 
+gg_cbind <- function(..., widths = NULL) {
+  if(length(match.call()) - 2 != length(widths))
+    message("Number of widths does not match number of columns")
+  gg <- gtable_cbind(...)
+  panels = gg$layout$l[grep("panel", gg$layout$name)]
+  gg$widths[panels] <- unit(widths, "null")
+  return(gg)
+}
+
+g <- gg_cbind(gtable_frame(g1),
+              gtable_frame(g2),
+              gtable_frame(g3),
+              gtable_frame(g4),
+              gtable_frame(g5),
+              widths = c(4,1,10,1,15))
+plot(g)
+
 ## Adjust relative height of panels
-panels = g$layout$t[grep("panel", g$layout$name)]
-g$heights[panels] <- unit(c(2,1,10,1,15), "null")
+#panels = g$layout$l[grep("panel", g$layout$name)]
+#g$widths[panels] <- unit(c(2,1,10,1,15), "null")
 
 plot(g)
 plot(gleg)
 
-pdf(file = "figures/Fig4.pdf", width = 12, height = 6)
+pdf(file = "figures/Fig4.pdf", width = 8, height = 12)
 grid.newpage()
 grid.draw(g)
 dev.off()
