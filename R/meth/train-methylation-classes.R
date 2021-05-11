@@ -10,11 +10,12 @@
 library(tidyverse)
 library(gridExtra)
 library(ggplot2)
+library(InfiniumPurify)
 
 source('R/lib/liblinear-tools.R')
 
 ## Load MSG data
-load('results/FRONTIER.QC.filtered.normalized.anno.final.Rdata')
+load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 
 ## Load TCGA methylation data (matrix supplied by Houtan & co.)
 load('data/tcgameth/LGG-GBM-heatmap.Rda')
@@ -73,8 +74,13 @@ tcgameth3 = rbind(tcgameth, t(all_b[selected_probes, all_data$Dataset == "DKFZ" 
 target3 = c(target3, rep("Normal", sum(all_data$Dataset == "DKFZ" & all_data$Sample_Type == "Cortex")))
 
 ## Filter training set
-train = t(all_b[selected_probes, all_data$Dataset != "DKFZ"])
+train = t(all_b[, all_data$Dataset != "DKFZ"])
 train_meta = pData(all_data)[all_data$Dataset != "DKFZ",]
+
+## Controls
+train_ctrl = t(all_b[, all_data$Dataset == "DKFZ"])
+train_ctrl_meta = pData(all_data)[all_data$Dataset == "DKFZ",]
+
 
 ######
 ## Cross validation - Predict methylation classes
@@ -112,17 +118,30 @@ dev.off()
 ## Calculate fit
 fit = LiblineaR(tcgameth1, target1, type = 0, cost = 1, bias = 1, verbose = FALSE)
 
+pur_vec = train_meta$purity
+names(pur_vec) = train_meta$Sentrix_Accession
+
+## Adjust training
+train_adj = InfiniumPurify(t(train), t(train_ctrl), pur_vec)
+
 ## Predict
 all_predict = predict(fit, train, proba = T, decisionValues = T)
+
+## Predict post-adjustment
+all_predict_adj = predict(fit, t(train_adj), proba = T, decisionValues = T)
 
 ## To data frame
 prob = all_predict$probabilities
 colnames(prob) = sprintf("Cell_proba_%s", colnames(prob))
+prob_adj = all_predict_adj$probabilities
+colnames(prob_adj) = sprintf("Cell_proba_adj_%s", colnames(prob_adj))
 tmp = data.frame(Sentrix_Accession = rownames(train_meta),
                  Cell_Predict = as.character(all_predict$predictions),
-                 stringsAsFactors = F) %>% cbind(prob)
+                 Cell_Predict_adj = as.character(all_predict_adj$predictions),
+                 stringsAsFactors = F) %>% cbind(prob) %>% cbind(prob_adj) %>%
+  left_join(dplyr::select(as.data.frame(train_meta), Sentrix_Accession, Patient))
 
-write.csv(tmp, file = 'results/meth/FRONTIER.PredictCell2016.csv', row.names = F, quote = F)
+write.csv(tmp, file = 'results/FRONTIER.PredictCell2016_v20210304.csv', row.names = F, quote = F)
 
 rm(prob, tmp, dateseed, real_pred, real_res, fit, all_predict)
 

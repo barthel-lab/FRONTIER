@@ -1,4 +1,5 @@
 source("R/meth/heterogeneity-init.R")
+#meta <- read.csv('results/meta/FRONTIER.meta.csv', as.is = TRUE) %>% filter(Dataset == "VUmc")
 source("R/meth/heterogeneity-func.R")
 
 library(apTreeshape)
@@ -7,7 +8,28 @@ library(phangorn)
 library(phytools)
 library(ggrepel)
 library(egg)
+library(ggpubr)
 library(ade4)
+
+# Load TPM data
+tpmdat <- read_csv('results/meta/FRONTIER.tpm_voxel_intensities.transformed.csv') %>%
+  left_join(select(meta, Patient, Biopsy, Sentrix_Accession)) %>%
+  mutate(vv = ifelse(vvl > vvr, vvl, vvr))
+
+## Define subtypes
+mut_noncodel <- c("Toronto-01", "UCSF-01", "UCSF-04","UCSF-17", "UCSF-18", "UCSF-90", "VUmc-01", "VUmc-03", "VUmc-04", "VUmc-06", "VUmc-09", "Vumc-10", "Vumc-12", "Vumc-15") # mut-codel
+wt <- c("Toronto-02", "Toronto-03", "Toronto-04", "Toronto-05", "VUmc-02", "VUmc-07", "VUmc-08", "Vumc-11", "Vumc-13", "Vumc-14", "Vumc-17")
+mut_codel <- c("UCSF-49", "VUmc-05")
+
+## Update meta with subtypes
+meta <- meta %>% mutate(idh_codel_subtype = case_when(Patient %in% mut_noncodel ~ "IDHmut-noncodel",
+                                                      Patient %in% mut_codel ~ "IDHmut-codel",
+                                                      Patient %in% wt ~ "IDHwt",
+                                                      TRUE ~ NA_character_),
+                        idh_subtype = case_when(Patient %in% mut_noncodel ~ "IDHmut",
+                                                Patient %in% mut_codel ~ "IDHmut",
+                                                Patient %in% wt ~ "IDHwt",
+                                                TRUE ~ NA_character_))
 
 mnidist <- read_csv('results/meta/FRONTIER.distances.transformed.csv') %>%
   left_join(select(meta, Patient, Biopsy, Sentrix_Accession))
@@ -139,7 +161,7 @@ dat <- bind_rows(dat)
 ggplot(dat, aes(x = Patient, y = -log10(all_ape_p))) + geom_col() + geom_hline(yintercept = -log10(0.05), col = "red", linetype = 2) + theme_bw() + coord_flip() + labs(y = "-log10(P-value)")
 
 ###########################################################################################################################################################################
-## Stuff
+## Anatomical distance analysis
 ###########################################################################################################################################################################
 
 ## Patients
@@ -194,13 +216,12 @@ dat <- lapply (pts, function(pt) {
   smeta$root_tip_dist = root_tip_dist
   
   # out
-  out <- smeta %>% select(Patient, Biopsy, Sentrix_Accession = label, PAMES, Class, Dist_to_nCE_surface, Dist_to_CE_surface, tip_order, root_tip_dist) %>%
+  out <- smeta %>% select(Patient, Biopsy, Sentrix_Accession = label, PAMES, Class, idh_subtype, idh_codel_subtype, Dist_to_nCE_surface, Dist_to_CE_surface, tip_order, root_tip_dist) %>%
     filter(Sentrix_Accession != "ROOT")
   return(out)
 
 })
-dat <- bind_rows(dat) %>% left_join(mnidist) %>% filter(Class != "Normal")
-
+dat <- bind_rows(dat) %>% left_join(mnidist) %>% left_join(tpmdat) #%>% filter(Class != "Normal")
 
 
 ## White matter infiltration is early
@@ -215,8 +236,16 @@ t.test(dat$root_tip_dist ~ dat$dist_wmat < 0, paired = FALSE, var.equal = TRUE)
 ## most convincing
 wilcox.test(dat$root_tip_dist ~ dat$dist_wmat < 0)
 boxplot(dat$root_tip_dist ~ dat$dist_wmat < 0)
+boxplot(dat$root_tip_dist ~ dat$tip_order)
+boxplot(dat$dist_wmat ~ dat$tip_order)
 #plot(dat$tip_order, dat$dist_wmat)
 #ggplot(dat, aes(x=tip_order, fill = dist_wmat < 0)) + geom_bar() #, )
+
+ggplot(dat, aes(x = ifelse(dist_wmat < 0, "White Matter","Gray Matter"), y = root_tip_dist)) +
+  geom_boxplot() + 
+  stat_compare_means(label.x = 1.4) +
+  theme_bw() + 
+  labs(x = "Compartment localization", y = "Root/tip distance")
 
 ##
 #wilcox.test(dat$tip_order ~ dat$dist_wmat < 0)
@@ -230,208 +259,110 @@ plot(dat$root_tip_dist, dat$dist_vent)
 cor.test(dat$root_tip_dist, dat$dist_vent)
 cor.test(dat$root_tip_dist, dat$dist_vent, method = "s")
 cor.test(dat$tip_order, dat$dist_vent, method = "s")
+boxplot(dat$dist_vent ~ dat$tip_order)
 t.test(dat$dist_vent ~ dat$tip_order>3)
 t.test(dat$dist_vent ~ dat$root_tip_dist > 0.08, var.equal = TRUE)
+wilcox.test(dat$dist_vent ~ dat$root_tip_dist > 0.08)
 boxplot(dat$dist_vent ~ dat$root_tip_dist > 0.08) ## normals included
-boxplot(dat$dist_vent ~ dat$root_tip_dist > 0.06)
 
-  # 
-  # ## Plot phylogeny in 3D phylomorphospace
-  # mspat3d <- as.matrix(smeta[-which(smeta$label=="ROOT"),c('X','Y','Z')])
-  # rownames(mspat3d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
-  # 
-  # ## Convert to dataframe for metadata
-  # mspat3d_tips <- as_tibble(mspat3d) %>% mutate(Biopsy = rownames(mspat3d), Tip = TRUE) %>% 
-  #   left_join(smeta) %>% mutate(Node = match(Biopsy, trespat$tip.label)) %>% select(Patient, Node, Tip, Biopsy, X, Y, Z, HE, MIB, HBclass, HBsubclass, Subtype)
-  # 
-  # ## Determine 3D location of nodes
-  # mspat3d_nodes_m <- apply(mspat3d, 2, function(x, tree) fastAnc(tree, x), tree = trespat)
-  # mspat3d_nodes <- as_tibble(mspat3d_nodes_m) %>% mutate(Patient = pt, Node = as.integer(rownames(mspat3d_nodes_m)), Tip = FALSE) %>%
-  #   select(Patient,Node,Tip,X,Y,Z)
-  # 
-  # mspat3d_nodes_tips <- mspat3d_tips %>% full_join(mspat3d_nodes) %>% arrange(Node)
-  # 
-  # 
-  
-  ## Phylin analysis
-  # library(phylin)
-  # 
-  # n_tips <- length(trespat$tip.label)
-  # gv <- gen.variogram(as.dist(mdist[1:n_tips,1:n_tips]), as.dist(gdist[1:n_tips,1:n_tips]), lag = quantile(mdist[1:n_tips,1:n_tips], 0.1), lmax = max(mdist[1:n_tips,1:n_tips]))
-  # gv <- gv.model(gv)
-  # plot(gv)
-  # 
-  # gv2 <- gv.model(gv, range=8)
-  # gv3 <- gv.model(gv, model='linear', range=8)
-  # plot(gv2)
-  # plot(gv3)
-  # 
-  # grid <- expand.grid(x = seq(floor(min(mspat3d_nodes_tips$X)), ceiling(max(mspat3d_nodes_tips$X)), length.out = 25),
-  #                     y = seq(floor(min(mspat3d_nodes_tips$Y)), ceiling(max(mspat3d_nodes_tips$Y)), length.out = 25),
-  #                     z = seq(floor(min(mspat3d_nodes_tips$Z)), ceiling(max(mspat3d_nodes_tips$Z)), length.out = 25))
-  # 
-  # kri <- krig(dist.nodes(tre)[which(tre$tip.label=="ROOT"),][1:n_tips],
-  #             as.matrix(mspat3d_tips[,c('X','Y','Z')]),
-  #             grid,
-  #             gv,
-  #             distFUN = euc.dist.2)
-  # 
-  # tmp <- gridkri %>% filter(Z > 0.12)
-  # 
-  # ## Add samples back in
-  # 
-  # 
-  # v <- tmp$Z
-  # vlim <- range(v)
-  # vlen <- 100*(vlim[2] - vlim[1]) + 1
-  # 
-  # colorlut <- rev(heat.colors(vlen)) # height color lookup table
-  # col <- colorlut[ 100*v - 100*vlim[1] + 1 ]
-  # 
-  # rgl.open()# Open a new RGL device
-  # rgl.bg(color = "white") # Setup the background color
-  # rgl.spheres(tmp$x, tmp$y, tmp$z, r = 1, color = colorlut)
-  # 
-  # open3d()
-  # surface3d(gridkri$x, gridkri$y, gridkri$z, color = col, back = "lines")
-  # 
-  # ## Euclidian distance function
-  # ## FROM: https://stackoverflow.com/questions/39671579/compute-euclidean-distance-matrix-from-x-y-z-coordinates
-  euc.dist.3 <- function(x1, x2, y1, y2, z1, z2 ) sqrt( (x2 - x1)^2 + (y2 - y1)^2 + (z2 - z1)^2 )
-  # 
-  # euc.dist.2 <- function(from, to, ..) {
-  #   
-  #   out <- matrix(NA, nrow = nrow(from), ncol = nrow(to))
-  #   for(i in 1:nrow(out))
-  #     for(j in 1:ncol(out))
-  #       out[i,j] = sqrt( (to[j,1] - from[i,1])^2 + (to[j,2] - from[i,2])^2 + (to[j,3] - from[i,3])^2 )
-  #   
-  #   return(out)
-  # }
-  
-  ## Determine segments
-  mspat3d_seg <- tibble(Patient = pt, Node1 = trespat$edge[,1], Node2 = trespat$edge[,2], 
-                        BranchLength = trespat$edge.length) %>%
-    left_join(mspat3d_nodes_tips, by = c("Node1"="Node", "Patient"="Patient")) %>%
-    select(Patient, Node1, X1 = X, Y1 = Y, Z1 = Z, Node2, BranchLength) %>% 
-    left_join(mspat3d_nodes_tips, by = c("Node2"="Node", "Patient"="Patient")) %>%
-    select(Patient, Node1, X1, Y1, Z1, Node2, X2 = X, Y2 = Y, Z2 = Z, BranchLength) %>%
-    mutate(PhyDist = euc.dist.3(X1,X2,Y1,Y2,Z1,Z2),
-           MaxRootTipRelBranchLength = BranchLength / max_root_tip_dist,
-           Magnitude = MaxRootTipRelBranchLength * PhyDist,
-           DistToStart = (PhyDist - Magnitude) / 2,
-           DistToEnd = DistToStart + Magnitude,
-           Xs = X1+(X2-X1)*(DistToStart/PhyDist),
-           Ys = Y1+(Y2-Y1)*(DistToStart/PhyDist),
-           Zs = Z1+(Z2-Z1)*(DistToStart/PhyDist),
-           Xe = X1+(X2-X1)*(DistToEnd/PhyDist),
-           Ye = Y1+(Y2-Y1)*(DistToEnd/PhyDist),
-           Ze = Z1+(Z2-Z1)*(DistToEnd/PhyDist))
-  
-  m_nodes <- as.matrix(mspat3d_nodes[,c('X','Y','Z')])
-  m_tips <-  as.matrix(mspat3d_tips[,c('X','Y','Z')])
-  
-  params <- get("r3dDefaults")
-  
-  subtype_cols <- c('Classic-like'='red','Codel'='purple','Cortex'='tan4',
-                    'G-CIMP-high'='green','Inflammatory-TME'='orange',
-                    'Mesenchymal-like'='blue','Reactive-TME'='yellow')
-  
-  # plot3d(rbind(m_tips,m_nodes), xlab = "X", ylab = "Y", 
-  #        zlab = "Z", axes = TRUE, box = TRUE, 
-  #        params = params)
-  # 
-  # spheres3d(m_tips, radius = 0.02 * mean(apply(m_tips, 2, max) - apply(m_tips, 2, min)),
-  #           color = subtype_cols[mspat3d_tips$Subtype])
-  # 
-  # for (i in 1:nrow(mspat3d_seg)) { message(i); segments3d(as.numeric(mspat3d_seg[i,c("X1","X2")]), as.numeric(mspat3d_seg[i,c("Y1","Y2")]), as.numeric(mspat3d_seg[i,c("Z1","Z2")]), lwd = 1, col = "lightgray") }
-  # 
-  # for (i in 1:nrow(mspat3d_seg)) { message(i); arrow3d(p0 = c(mspat3d_seg$Xs[i], mspat3d_seg$Ys[i],  mspat3d_seg$Zs[i]),
-  #                                                      p1 = c(mspat3d_seg$Xe[i], mspat3d_seg$Ye[i],  mspat3d_seg$Ze[i])) }
-  # 
-  # arrow3d(p0 = c(mspat3d_seg$Xs[i], mspat3d_seg$Ys[i],  mspat3d_seg$Zs[i]),
-  #         p1 = c(mspat3d_seg$Xe[i], mspat3d_seg$Ye[i],  mspat3d_seg$Ze[i]))
-  # 
-  # rgl.spheres(tmp$x, tmp$y, tmp$z, r = 1, color = colorlut)
-  # 
-  # ems <- colMeans(m_tips)
-  # rs <- apply(rbind(m_tips,m_nodes), 2, range)
-  # rs <- rs[2, ] - rs[1, ]
-  # for (i in 1:nrow(mspat3d_tips)) {
-  #   adj <- 0.03 * rs * (2 * (m_tips[i, ] > ms) - 1)
-  #   text3d(m_tips[i, ] + adj, texts = mspat3d_tips$Biopsy[i])
-  # }
-  # 
-  # xx <- spin3d(axis = c(0, 0, 1), rpm = 10)
-  # play3d(xx, duration = 5)
-  # 
-  # movie3d(xx,
-  #         movie= sprintf("/tier2/verhaak-lab/barthf/FRONTIER/%s-3d",pt),
-  #         duration=10, convert=TRUE, clean=TRUE, verbose=TRUE, type="gif")
-  # 
-  # phylomorphospace3d(trespat, X=mspat3d, A=mspat3d_nodes_m, method = "dynamic")
-  
-  ## Export dynamic 3D plot as GIF
-  #pmorph3d <- phylomorphospace3d(trespat, X=mspat3d, A=mspat3dN, method = "dynamic")
-  #movie3d(pmorph3d,
-  #        movie= sprintf("/Users/barthf/Documents/FRONTIER/%s-3d",pt),
-  #        duration=10, convert=TRUE, clean=TRUE, verbose=TRUE, type="gif")
-  
-  ## Color tips
-  subtype_cols <- c('Classic-like'='red','Codel'='purple','Cortex'='tan4',
-                    'G-CIMP-high'='green','Inflammatory-TME'='orange',
-                    'Mesenchymal-like'='blue','Reactive-TME'='yellow')
-  # 
-  # cols3d <- subtype_cols[smeta$Subtype[match(trespat$tip.label, smeta$Biopsy)]]
-  # names(cols3d) <- trespat$tip.label
-  # 
-  # ## Static 3D plots allows nodes to be colored
-  # png(sprintf("/Users/barthf/Documents/FRONTIER/%s-3d.png",pt), width = 480, height = 480)
-  # pmorph3dstat <- phylomorphospace3d(trespat, mspat3d, method = "static")
-  # pmorph3dstat$points3d(mspat3d,cex=1.4,pch=21,bg=cols3d[rownames(mspat3d)])
-  # dev.off()
-  # 
-  # ## Plot in 2d phylospace
-  # mspat2d <- smeta[-which(smeta$label=="ROOT"), c('X','Y')]/smeta[1:nrow(smeta)-1,c('Z')]
-  # rownames(mspat2d) <- smeta$Biopsy[-which(smeta$label=="ROOT")]
-  # 
-  # cols2d <- c(subtype_cols[smeta$Subtype[match(trespat$tip.label, smeta$Biopsy)]],rep("black",trespat$Nnode))
-  # cols2d <- ifelse(is.na(cols2d), 'black', cols2d)
-  # names(cols2d) <- 1:(length(trespat$tip)+trespat$Nnode)
-  # 
-  # png(sprintf("/Users/barthf/Documents/FRONTIER/%s-2d.png",pt), width = 480, height = 480)
-  # pmorph2d <- phylomorphospace(trespat, mspat2d, control=list(col.node=cols2d))
-  # dev.off()
-  # 
-  # ## identify tumor clade
-  # tumor_samples <- as.character(smeta$label[grepl("Tumor",smeta$Class)])
-  # ## Identify most recent common ancestor of all tumor samples
-  # tumor_clade_node <- MRCA(tre,na.omit(tumor_samples))
-  # 
-  # ## Plot phylogenetic tree
-  # gtre <- as_tibble(tre) %>% full_join(smeta, by = c("label"="label")) %>% as.treedata()
-  # maxdist <- max(dist.nodes(tre))
-  # 
-  # ptre <- ggtree(gtre) +
-  #   geom_tippoint(aes(color = Subtype), size = 3 ) +
-  #   guides(color = FALSE) +
-  #   geom_tiplab(aes(label = Biopsy), offset = maxdist * 0.01, align = TRUE) +
-  #   xlim(0, maxdist+maxdist*0.10) + 
-  #   scale_color_manual(values = subtype_cols, na.value = "gray")
-  # 
-  # ptre_full <- ptre + 
-  #   labs(title = sprintf("Phylogenetic tree for %s", pt)) +
-  #   geom_treescale() +
-  #   geom_hilight(node = tumor_clade_node, fill = "tan", alpha = 0.2) + 
-  #   geom_cladelabel(node = tumor_clade_node, label = "Tumor", angle = 270, hjust = 0.5, offset = maxdist * 0.1, offset.text = maxdist * 0.03) +
-  #   geom_nodepoint(aes(shape = ifelse(node == tumor_clade_node, 't', 'f')), size = 3, color = "red") + 
-  #   scale_shape_manual(values = c('t'=8,'f'=NA)) +
-  #   guides(shape = FALSE, color = guide_legend())
-  # 
-  # png(sprintf("/Users/barthf/Documents/FRONTIER/%s-phylo.png",pt), width = 600, height = 480)
-  # plot(ptre_full)
-  # dev.off()
-  
-  return(list(nodes=mspat3d_nodes_tips, seg=mspat3d_seg))
-})
-names(frontier_phy) <- pts
+ggplot(dat, aes(x = ifelse(root_tip_dist > 0.07, 'Late', 'Early'), y = dist_vent)) +
+  geom_boxplot() +
+  stat_compare_means(label.x = 1.4) +
+  theme_bw() + 
+  labs(x = "Regional timing", y = "Distance to lateral ventricle")
+
+## Cortex dstances
+cor.test(dat$dist_cort, dat$root_tip_dist)
+cor.test(dat$dist_cort, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_cort ~ dat$tip_order > 4)
+t.test(dat$dist_cort ~ dat$tip_order > 4, var.equal = TRUE)
+wilcox.test(dat$dist_cort ~ dat$tip_order > 4)
+
+## Thalamus dstances
+cor.test(dat$dist_thal, dat$root_tip_dist)
+cor.test(dat$dist_thal, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_thal ~ dat$tip_order)
+
+## Caudate dstances
+cor.test(dat$dist_caud, dat$root_tip_dist)
+cor.test(dat$dist_caud, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_caud ~ dat$tip_order)
+
+## Amygdala dstances
+cor.test(dat$dist_amyg, dat$root_tip_dist)
+cor.test(dat$dist_amyg, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_amyg ~ dat$tip_order)
+
+## Amygdala dstances
+cor.test(dat$dist_puta, dat$root_tip_dist)
+cor.test(dat$dist_puta, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_puta ~ dat$tip_order)
+
+## Pallidum dstances
+cor.test(dat$dist_pall, dat$root_tip_dist)
+cor.test(dat$dist_pall, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_pall ~ dat$tip_order)
+
+## Hippocampus dstances
+plot(dat$dist_hipp, dat$root_tip_dist)
+cor.test(dat$dist_hipp, dat$root_tip_dist)
+cor.test(dat$dist_hipp, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_hipp ~ dat$tip_order)
+
+## Accumbens dstances
+plot(dat$dist_accu, dat$root_tip_dist)
+cor.test(dat$dist_accu, dat$root_tip_dist)
+cor.test(dat$dist_accu, dat$root_tip_dist, method = "s")
+boxplot(dat$dist_accu ~ dat$tip_order)
+
+## Plot purity distance relationship
+## Using raw sample-surface distances in original space
+ggplot(dat, aes(x = Dist_to_nCE_surface, y = PAMES)) + geom_point() + facet_wrap(~Class)
+
+ggplot(dat, aes(x = Dist_to_nCE_surface, y = PAMES)) + 
+  geom_point() + 
+  stat_cor(label.x = 12,
+           label.sep = "\n",
+           label.x.npc = "left") + 
+  facet_wrap(~idh_subtype) + 
+  labs(x = "Distance to FLAIR volume", y = "Tumor purity") +
+  theme_bw()
+
+ggplot(dat, aes(x = Dist_to_CE_surface, y = PAMES)) + 
+  geom_point() + 
+  stat_cor(label.x = 20,
+           label.sep = "\n",
+           label.x.npc = "left") + 
+  facet_wrap(~idh_subtype) + 
+  labs(x = "Distance to T1G volume", y = "Tumor purity") +
+  theme_bw()
+
+ggplot(dat, aes(x = Dist_to_CE_surface, y = PAMES)) + geom_point() + facet_wrap(~idh_subtype)
+
+###########################################################################################################################################################################
+## Tumor probability map vs timing
+###########################################################################################################################################################################
+
+## Run loop in section above to get dat 
+
+dat <- dat2 %>% filter(Class != "Normal", !is.na(vv)) # filter(PAMES > 0.5) #
+
+plot(density(dat$root_tip_dist))
+plot(density(dat$vv, na.rm = TRUE))
+
+plot(dat$vv, dat$root_tip_dist)
+cor.test(dat$vv, dat$root_tip_dist)
+cor.test(dat$vv, dat$root_tip_dist, method = "s")
+boxplot(dat$vv ~ dat$tip_order)
+boxplot(dat$vv ~ dat$root_tip_dist > 0.06)
+t.test(dat$vv ~ dat$root_tip_dist > 0.08, var.equal = TRUE)
+wilcox.test(dat$vv ~ dat$root_tip_dist > 0.08)
+wilcox.test(dat$root_tip_dist ~ dat$vv > 0.2)
+boxplot(dat$root_tip_dist ~ dat$vv > 0.2)
+
+
+ggplot(dat, aes(x = ifelse(vv > 0.2, 'High tumor probability', 'Low tumor probability'), y = root_tip_dist)) +
+  geom_boxplot() +
+  stat_compare_means(label.x = 1.4) +
+  theme_bw() + 
+  labs(x = "Tumor Probability", y = "Root/tip distance")

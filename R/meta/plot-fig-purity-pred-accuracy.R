@@ -22,11 +22,30 @@ load('results/FRONTIER.QC.filtered.normalized.anno.final.meta.Rdata')
 load("sandbox/HB05.Rdata") ## assignments
 load("sandbox/HBprob.RData") ## probabilities
 
+tmp1 <- read_tsv('results/hb/frontier-mnp-classification-mcf-response-il450k.txt')
+tmp2 <- read_tsv('results/hb/frontier-mnp-classification-mcf-response-ilEPIC.txt')
+hbmain <- bind_rows(tmp1,tmp2) %>% dplyr::rename(Sentrix_Accession = X1)
+  left_join(HB0.5)
+  
+#View(hbmain[,c("X1","mnp_mcf_response","HBsubclass0.5")])
+
+tmp1 <- read_tsv('results/hb/frontier-mnp-classification-nonmcf-response-il450k.txt')
+tmp2 <- read_tsv('results/hb/frontier-mnp-classification-nonmcf-response-ilEPIC.txt')
+tmp <- bind_rows(tmp1,tmp2) %>% left_join(HB0.5, c("X1" = "Sentrix_Accession"))
+View(tmp[,c("X1","mnp_response","HBsubclass0.5")])
+
 ## Initialize colors
 HBcolor = c("chocolate4","orange","blue","red","pink","chocolate4","lightgreen","darkgreen","gray20","gray80","gray50","purple","chocolate4")
 names(HBcolor) = c(" HEMI"," INFLAM"," MES", " RTK I", " RTK II"," WM","A IDH","A IDH, HG","CONTR","GBM",  "Glioma IDH","O IDH","PLEX, PED A ")
 Cellcolor = c("red","purple","chocolate4","lightgreen","orange","blue","yellow")
 names(Cellcolor) = c("Classic-like","Codel","Cortex","G-CIMP-high","Inflammatory-TME","Mesenchymal-like", "Reactive-TME")
+
+HBmaincolor = c("chocolate4","orange","red","pink","green","gray","yellow")
+names(HBmaincolor) = c("CONTR, HEMI","CONTR, INFLAM","MTGF_GBM","CONTR, WM","MTGF_IDH_GLM","CONTR, HYPTHAL","MTGF_PLEX_T")
+
+HBmaincolor_v2 = c("chocolate4","red","green","gray")
+names(HBmaincolor) = c("CONTR","MTGF_GBM","MTGF_IDH_GLM","MTGF_PLEX_T")
+
 
 ##################################################
 ## Initialize dataset
@@ -52,6 +71,7 @@ sample_order = levels(meta$Sentrix_Accession)
 ## arrange HB dataframes in correct order
 HB0.5 <- HB0.5 %>% filter(as.character(Sentrix_Accession) %in% sample_order) %>% mutate(Sentrix_Accession = factor(as.character(Sentrix_Accession), levels = sample_order))
 HBprob <- HBprob %>% filter(as.character(idat) %in% sample_order) %>% mutate(Sentrix_Accession = factor(as.character(idat), levels = sample_order)) 
+hbmain <- hbmain %>% filter(Sentrix_Accession %in% sample_order) %>% mutate(Sentrix_Accession = factor(Sentrix_Accession, levels = sample_order))
 
 ##################################################
 
@@ -113,14 +133,22 @@ testPlot(p1)
 ##################################################
 ## Plot methylation class result
 
+## Infer prediction accuracy based on chosen class and prediction for that class
+y <- sprintf("Cell_proba_%s", gsub("-",".",meta$Cell_Predict))
+meta$Cell_Predict_proba = unlist(unname(sapply(1:length(y), function(i) meta[i,y[i]])))
+
+## Conditional for making a confident classification
+meta$Cell_Predict_conf = factor(ifelse(meta$purity > 0.5 & meta$Cell_Predict_proba > 0.75, "Yes", "No"), levels = c("No", "Yes"))
+
 tmp = meta %>%
-  select(Sentrix_Accession, Patient, Cell_Predict) %>%
+  select(Sentrix_Accession, Patient, Cell_Predict, Cell_Predict_conf) %>%
   mutate(y = "TCGA subtype")
 
 p2 = ggplot() +
-  geom_tile(data = tmp, aes(x = Sentrix_Accession, y = y, fill = Cell_Predict), color = "black") +
+  geom_tile(data = tmp, aes(x = Sentrix_Accession, y = y, fill = Cell_Predict, alpha = Cell_Predict_conf), color = "black") +
   labs(y = "", fill = "Class assignment") +
   scale_fill_manual(values = Cellcolor) + 
+  scale_alpha_manual(values = c(0.25,1)) +
   coord_flip()
 
 testPlot(p2)
@@ -163,6 +191,14 @@ tmp <- HBprob %>%
   filter(complete.cases(Patient), Prediction > 0.1) %>% 
   complete(nesting(Sentrix_Accession, Patient), Class, fill = list(Prediction=0))
 
+## Set HB class HB subclass sort order
+tmp$Class = factor(tmp$Class, levels = c("CONTR, HEMI", "CONTR, WM", "CONTR, INFLAM" ,"CONTR, PONS", "CONTR, HYPTHAL",
+                                         "PLEX, PED A ", "PLEX, PED B",
+                                         "LGG, GG", "LGG, PA/GG ST",
+                                         "A IDH", "A IDH, HG",
+                                         "O IDH",
+                                         "GBM, MES", "GBM, RTK I", "GBM, RTK II"))
+
 p5 = ggplot() +
   geom_tile(data = tmp, aes(x = Sentrix_Accession, y = Class, fill = Prediction), color = "black") +
   labs(y = "", fill = "Prediction Probability") +
@@ -171,12 +207,57 @@ p5 = ggplot() +
 
 testPlot(p5)
 
+## Plot HB main class assignments
+tmp = hbmain %>%
+  select(Sentrix_Accession, HBmain = mnp_mcf_response) %>%
+  mutate(y = "DKFZ family",
+         HBmain = ifelse(grepl("CONTR", HBmain), "CONTR", HBmain)) %>%
+  left_join(select(meta, Sentrix_Accession, Patient)) %>%
+  filter(complete.cases(Patient))
+
+p6 = ggplot() +
+  geom_tile(data = tmp, aes(x = Sentrix_Accession, y = y, fill = HBmain), color = "black") +
+  labs(y = "", fill = "DKFZ family") +
+  scale_fill_manual(values = HBmaincolor_v2) +
+  coord_flip()
+
+testPlot(p6)
+
+## Plot HB class predictions
+tmp <- hbmain %>% 
+  select(Sentrix_Accession, everything(), -mnp_mcf_response) %>%
+  gather("Class", "Prediction", -Sentrix_Accession) %>%
+  left_join(select(meta, Sentrix_Accession, Patient)) %>%
+  filter(complete.cases(Patient), Prediction > 0.1, Class != 'LGG, GG', Class != 'MTGF_PA') %>% 
+  complete(nesting(Sentrix_Accession, Patient), Class, fill = list(Prediction=0)) %>%
+  separate(Class, c("family", "subclass"), sep = ",") %>%
+  group_by(Sentrix_Accession, Patient, family) %>%
+  summarise(Prediction = sum(Prediction)) %>%
+  ungroup()
+
+## Set HB class HB subclass sort order
+#tmp$Class = factor(tmp$Class, levels = c("CONTR, HEMI", "CONTR, WM", "CONTR, INFLAM" ,"CONTR, PONS", "CONTR, HYPTHAL",
+#                                         "LGG, GG",
+#                                         "MTGF_PLEX_T",
+#                                         "MTGF_PA",
+#                                         "MTGF_IDH_GLM",
+#                                         "MTGF_GBM"))
+
+p7 = ggplot() +
+  geom_tile(data = tmp, aes(x = Sentrix_Accession, y = family, fill = Prediction), color = "black") +
+  labs(y = "", fill = "Prediction Probability") +
+  scale_fill_distiller(palette = "Blues", direction = 1) + #scale_fill_gradient(low = "#FFFFFF", high = "#084594")
+  coord_flip()
+
+testPlot(p7)
+
 # ## Legends
 #gleg0 = g_legend(p0)
 #gleg1 = g_legend(p1) 
 gleg2 = g_legend(p2) 
 gleg3 = g_legend(p3)
 gleg4 = g_legend(p4)
+gleg6 = g_legend(p6)
 #gleg5 = g_legend(p5) 
 #gleg6 = g_legend(p6) 
 #gleg7 = g_legend(p7)
@@ -192,9 +273,11 @@ g2 = ggplotGrob(p2 + plot_grid + plot_theme + null_legend + null_y + null_facet 
 g3 = ggplotGrob(p3 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
 g4 = ggplotGrob(p4 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
 g5 = ggplotGrob(p5 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
+g6 = ggplotGrob(p6 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
+g7 = ggplotGrob(p7 + plot_grid + plot_theme + null_legend + null_y + null_facet + middle_margin)  %>% gtable_frame()
 
 #g = gtable_cbind(g1, g2, g3, g4, g5)
-gleg = gtable_rbind(gleg2, gleg3, gleg4)
+gleg = gtable_rbind(gleg2, gleg3, gleg4, gleg6)
 
 gg_cbind <- function(..., widths = NULL) {
   if(length(match.call()) - 2 != length(widths))
@@ -210,7 +293,15 @@ g <- gg_cbind(gtable_frame(g1),
               gtable_frame(g3),
               gtable_frame(g4),
               gtable_frame(g5),
-              widths = c(4,1,10,1,15))
+              gtable_frame(g6),
+              gtable_frame(g7),
+              widths = c(4,1,10,1,15,1,10))
+plot(g)
+
+g <- gg_cbind(gtable_frame(g1),
+              gtable_frame(g6),
+              gtable_frame(g7),
+              widths = c(1.5,0.5,4))
 plot(g)
 
 ## Adjust relative height of panels
@@ -220,14 +311,14 @@ plot(g)
 plot(g)
 plot(gleg)
 
-pdf(file = "figures/Fig4.pdf", width = 8, height = 12)
+pdf(file = "figures/Fig4-supll.pdf", width = 16, height = 12)
 grid.newpage()
 grid.draw(g)
 dev.off()
 
-pdf(file = "figures/Fig4-legend.pdf", width = 4, height = 11)
+pdf(file = "figures/Fig4-legend-s.pdf", width = 4, height = 6)
 grid.newpage()
-grid.draw(gleg)
+grid.draw(gleg6)
 dev.off()
 
 #ids <- meta %>% select(Sentrix_Accession, Patient, sample_no)
